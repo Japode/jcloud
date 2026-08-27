@@ -30,6 +30,7 @@ routes:
     max_body: 4MB
     proxy:
       - header_up X-Forwarded-For {remote_host}
+      - header_up -X-View-Id
 env:
   - name: SITE_URL
     default: https://paste.example.com
@@ -55,16 +56,33 @@ volumes:
   paste-data:
 `
 
+// The route's source. Only the {$PASTE_HOSTS:…} reference is asserted against this;
+// what the route *means* is asserted against the adapted JSON below.
 const fixtureRoute = `{$PASTE_HOSTS:paste.example.com} {
 	request_body {
 		max_size 4MB
 	}
 	reverse_proxy paste:8080 {
 		header_up X-Forwarded-For {remote_host}
+		header_up -X-View-Id
 		health_uri /healthz
 	}
 }
 `
+
+// The shape `caddy adapt` produces, trimmed to what route_json.go reads. Written by
+// hand rather than generated, because `go test` has no caddy — the real thing is
+// adapted by scripts/check-jcloud.sh and asserted by TestCommittedManifestsAgree.
+const fixtureAdapted = `{"apps":{"http":{"servers":{"srv0":{"routes":[
+ {"match":[{"host":["paste.example.com"]}],
+  "handle":[{"handler":"subroute","routes":[{"handle":[
+    {"handler":"request_body","max_size":4000000},
+    {"handler":"reverse_proxy",
+     "headers":{"request":{"set":{"X-Forwarded-For":["{http.request.remote.host}"]},"delete":["X-View-Id"]}},
+     "health_checks":{"active":{"uri":"/healthz","interval":15000000000}},
+     "upstreams":[{"dial":"paste:8080"}]}
+  ]}]}]}
+]}}}}}`
 
 const fixtureBackupConf = `# what backup.sh treats specially
 sqlite paste-data paste.db
@@ -110,7 +128,7 @@ func write(t *testing.T, file, old, new string) string {
 	return root
 }
 
-func agreeIn(t *testing.T, root string) []string {
+func agreeIn(t *testing.T, root, adapted string) []string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(root, "services", "paste", "japode.yml"))
 	if err != nil {
@@ -123,12 +141,22 @@ func agreeIn(t *testing.T, root string) []string {
 	if p := m.Validate(); len(p) != 0 {
 		t.Fatalf("the fixture manifest is not even valid:\n  %s", strings.Join(p, "\n  "))
 	}
-	return m.Agree(root)
+	return m.AgreeWith(root, []byte(adapted))
 }
 
 func TestFixtureAgreesWithItself(t *testing.T) {
-	if p := agreeIn(t, write(t, "", "", "")); len(p) != 0 {
+	if p := agreeIn(t, write(t, "", "", ""), fixtureAdapted); len(p) != 0 {
 		t.Fatalf("the fixture should agree with itself, got:\n  %s", strings.Join(p, "\n  "))
+	}
+}
+
+// Without the adapted configuration the route's meaning is unchecked, and that is
+// said rather than passed over. This is the regression guard for JC33: the answer
+// to "I could not look" must never be a tick.
+func TestUnadaptedRouteIsReportedAndNotAssumed(t *testing.T) {
+	p := strings.Join(agreeIn(t, write(t, "", "", ""), ""), "\n")
+	if !strings.Contains(p, "what this route means is unchecked") {
+		t.Fatalf("expected the missing adapted config to be reported, got:\n%s", p)
 	}
 }
 
@@ -139,9 +167,6 @@ func TestDisagreements(t *testing.T) {
 	cases := []struct {
 		name, file, old, new, want string
 	}{
-		{"route points at another port", "caddy/sites/paste.caddy",
-			"reverse_proxy paste:8080", "reverse_proxy paste:8081",
-			"block(s) proxy to paste:8080"},
 		{"compose exposes another port", "services/paste/docker-compose.yml",
 			"- '8080'", "- '8081'",
 			"nothing exposes port 8080"},
@@ -169,15 +194,6 @@ func TestDisagreements(t *testing.T) {
 		{"a fixed value became configurable", "services/paste/docker-compose.yml",
 			"DATABASE_PATH: /data/paste.db", "DATABASE_PATH: ${PASTE_DATABASE_PATH:-/data/paste.db}",
 			"is not the fixed value"},
-		{"health_uri drifted", "caddy/sites/paste.caddy",
-			"health_uri /healthz", "health_uri /livez",
-			"no health_uri /healthz"},
-		{"a load-bearing proxy line went", "caddy/sites/paste.caddy",
-			"\t\theader_up X-Forwarded-For {remote_host}\n", "",
-			"does not carry \"header_up X-Forwarded-For {remote_host}\""},
-		{"max_body drifted", "caddy/sites/paste.caddy",
-			"max_size 4MB", "max_size 8MB",
-			"no max_size 4MB"},
 		{"hosts variable renamed", "caddy/sites/paste.caddy",
 			"{$PASTE_HOSTS:", "{$PASTE_ADDRESSES:",
 			"no address block reads {$PASTE_HOSTS:"},
@@ -204,11 +220,87 @@ func TestDisagreements(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			problems := strings.Join(agreeIn(t, write(t, c.file, c.old, c.new)), "\n")
+			problems := strings.Join(agreeIn(t, write(t, c.file, c.old, c.new), fixtureAdapted), "\n")
 			if !strings.Contains(problems, c.want) {
 				t.Fatalf("expected a problem containing %q, got:\n%s", c.want, problems)
 			}
 		})
+	}
+}
+
+// The route half, asked of what Caddy would run. Each case mutates the adapted
+// configuration, which is what the Caddyfile *means* — the file's text is not
+// touched at all, so none of these could be faked by a comment.
+func TestRouteDisagreements(t *testing.T) {
+	cases := []struct {
+		name, old, new, want string
+	}{
+		{"the block is commented out, so nothing answers for the host",
+			`{"match":[{"host":["paste.example.com"]}],`, `{"match":[{"host":["other.example.com"]}],`,
+			"nothing in the adapted config answers for paste.example.com"},
+		{"proxies to another port",
+			`"dial":"paste:8080"`, `"dial":"paste:8081"`,
+			"proxies to [paste:8081], and the manifest declares paste:8080"},
+		{"proxies to another service",
+			`"dial":"paste:8080"`, `"dial":"pastebin:8080"`,
+			"and the manifest declares paste:8080"},
+		{"health_uri drifted",
+			`"uri":"/healthz"`, `"uri":"/livez"`,
+			`health_uri is "/livez", and the manifest declares "/healthz"`},
+		{"max_size drifted",
+			`"max_size":4000000`, `"max_size":8000000`,
+			"max_size is 8000000 bytes, and the manifest declares 4MB (4000000)"},
+		{"the X-Forwarded-For override went",
+			`"set":{"X-Forwarded-For":["{http.request.remote.host}"]},`, `"set":{},`,
+			"does not set X-Forwarded-For"},
+		{"X-Forwarded-For is set to something else",
+			`["{http.request.remote.host}"]`, `["{http.request.header.X-Forwarded-For}"]`,
+			"is set to [{http.request.header.X-Forwarded-For}]"},
+		{"the X-View-Id strip went",
+			`"delete":["X-View-Id"]`, `"delete":[]`,
+			"does not strip X-View-Id"},
+		{"nothing proxies at all",
+			`"handler":"reverse_proxy"`, `"handler":"file_server"`,
+			"proxies to nothing"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			adapted := strings.Replace(fixtureAdapted, c.old, c.new, 1)
+			if adapted == fixtureAdapted {
+				t.Fatal("the patch changed nothing — the adapted fixture moved under this case")
+			}
+			problems := strings.Join(agreeIn(t, write(t, "", "", ""), adapted), "\n")
+			if !strings.Contains(problems, c.want) {
+				t.Fatalf("expected a problem containing %q, got:\n%s", c.want, problems)
+			}
+		})
+	}
+}
+
+// A directive the translator does not understand is reported, not skipped. Passing
+// over what it cannot verify is the same false negative in a different place.
+func TestUnknownProxyDirectiveIsReported(t *testing.T) {
+	root := write(t, "services/paste/japode.yml",
+		"      - header_up -X-View-Id", "      - lb_policy round_robin")
+	problems := strings.Join(agreeIn(t, root, fixtureAdapted), "\n")
+	if !strings.Contains(problems, "is not a directive this can check") {
+		t.Fatalf("expected the unknown directive to be reported, got:\n%s", problems)
+	}
+}
+
+func TestBytesOf(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want int64
+	}{{"8MB", 8000000}, {"4MB", 4000000}, {"20MiB", 20 * 1024 * 1024}, {"512B", 512}, {"1GB", 1000000000}} {
+		got, err := bytesOf(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("bytesOf(%q) = %d, %v; want %d", c.in, got, err, c.want)
+		}
+	}
+	if _, err := bytesOf("8 megabytes"); err == nil {
+		t.Error("expected a unit this does not understand to be an error")
 	}
 }
 
@@ -232,12 +324,15 @@ func TestBackupConfIsOptionalWhenNothingNeedsIt(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if p := agreeIn(t, root); len(p) != 0 {
+	if p := agreeIn(t, root, fixtureAdapted); len(p) != 0 {
 		t.Fatalf("no backup.conf and nothing needing one should agree, got:\n  %s", strings.Join(p, "\n  "))
 	}
 }
 
 // The committed tree has to agree, which is the assertion CI actually runs.
+// scripts/check-jcloud.sh adapts the real Caddyfile before calling go test, so the
+// route half is checked there; run on its own, `go test` has no caddy and says so
+// rather than passing on a weaker check.
 func TestCommittedManifestsAgree(t *testing.T) {
 	paths, err := filepath.Glob("../../services/*/japode.yml")
 	if err != nil {
@@ -245,6 +340,10 @@ func TestCommittedManifestsAgree(t *testing.T) {
 	}
 	if len(paths) == 0 {
 		t.Skip("no services/*/japode.yml in this tree")
+	}
+	adapted, err := os.ReadFile("../../.deploy-state/caddy-adapt.json")
+	if err != nil {
+		t.Skip("no ../../.deploy-state/caddy-adapt.json — run scripts/check-jcloud.sh, which adapts it first")
 	}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -255,7 +354,7 @@ func TestCommittedManifestsAgree(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
-		if p := m.Agree("../.."); len(p) != 0 {
+		if p := m.AgreeWith("../..", adapted); len(p) != 0 {
 			t.Errorf("%s does not agree with the files beside it:\n  %s", path, strings.Join(p, "\n  "))
 		}
 	}

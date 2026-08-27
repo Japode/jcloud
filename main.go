@@ -38,17 +38,25 @@ func main() {
 			fmt.Fprintln(os.Stderr, "jcloud check: name at least one japode.yml")
 			os.Exit(2)
 		}
-		os.Exit(check(args[1:], ""))
+		os.Exit(run(args[1:], "", nil))
 	case "agree":
 		// The repository root is an argument and not derived from the manifest's
 		// path, because the manifest is read where it sits and the files it is
 		// compared against are found from the root — and a service adopted from
 		// another repository will not have the two in the same place.
-		if len(args) < 3 {
-			fmt.Fprintln(os.Stderr, "jcloud agree <repository-root> <japode.yml> …")
+		rest := args[1:]
+		adapted := ""
+		if len(rest) >= 2 && rest[0] == "--adapted" {
+			// A file and not a command to run: this build shells out to nothing,
+			// and `caddy adapt` belongs to the script that already has a pinned
+			// caddy image. See tools/jcloud/route_json.go for why it is read at all.
+			adapted, rest = rest[1], rest[2:]
+		}
+		if len(rest) < 2 {
+			fmt.Fprintln(os.Stderr, "jcloud agree [--adapted <caddy-adapt.json>] <repository-root> <japode.yml> …")
 			os.Exit(2)
 		}
-		os.Exit(check(args[2:], args[1]))
+		os.Exit(agree(rest[1:], rest[0], adapted))
 	case "version", "--version":
 		fmt.Printf("jcloud %s (schema version %d)\n", Version, SchemaVersion)
 	default:
@@ -76,12 +84,25 @@ render, init, adopt and up are specified in docs/JCLOUD.md and not implemented.
 `, Version)
 }
 
-// check validates each manifest, and — when root is not empty — also compares it
+// agree reads the adapted configuration, if one was named, and hands it on.
+func agree(paths []string, root, adaptedPath string) int {
+	var adaptedConfig []byte
+	if adaptedPath != "" {
+		var err error
+		if adaptedConfig, err = os.ReadFile(adaptedPath); err != nil {
+			fmt.Fprintf(os.Stderr, "jcloud agree: %v\n", err)
+			return 2
+		}
+	}
+	return run(paths, root, adaptedConfig)
+}
+
+// run validates each manifest, and — when root is not empty — also compares it
 // against the files deployed beside it. One function for both because the second
 // question is only worth asking of a manifest that survived the first: a port that
 // is not a port disagrees with everything, and reporting that four times over is
 // noise standing where one answer belongs.
-func check(paths []string, root string) int {
+func run(paths []string, root string, adaptedConfig []byte) int {
 	bad := 0
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -100,7 +121,7 @@ func check(paths []string, root string) int {
 
 		problems := m.Validate()
 		if len(problems) == 0 && root != "" {
-			problems = m.Agree(root)
+			problems = m.AgreeWith(root, adaptedConfig)
 		}
 		if len(problems) == 0 {
 			what := "states what it declares"

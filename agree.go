@@ -35,6 +35,15 @@ import (
 // root is the repository root; the manifest's own directory is derived from name,
 // because that convention is the schema's and not a caller's to vary.
 func (m *Manifest) Agree(root string) []string {
+	return m.AgreeWith(root, nil)
+}
+
+// AgreeWith is Agree with Caddy's adapted configuration in hand. Without it the
+// route's meaning is unchecked and said so, rather than checked weakly: the
+// substring comparison that used to stand in for it passed on a commented-out
+// route (JC33), and a check that can be satisfied by a comment is worse than one
+// that says it did not run.
+func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -51,8 +60,26 @@ func (m *Manifest) Agree(root string) []string {
 	if compose, ok := read(filepath.Join(svcDir, "docker-compose.yml")); ok {
 		p = append(p, m.agreeCompose(filepath.ToSlash(filepath.Join(svcDir, "docker-compose.yml")), compose)...)
 	}
+	routeRel := filepath.ToSlash(filepath.Join("caddy", "sites", m.Name+".caddy"))
 	if route, ok := read(filepath.Join("caddy", "sites", m.Name+".caddy")); ok {
-		p = append(p, m.agreeRoute(filepath.ToSlash(filepath.Join("caddy", "sites", m.Name+".caddy")), route)...)
+		// Only the source-level assertion stays textual: whether the address block
+		// reads {$SVC_HOSTS:…} is a fact about the file, and `caddy adapt` has
+		// already resolved that away into the default it carries.
+		p = append(p, m.agreeRouteSource(routeRel, route)...)
+	}
+	switch {
+	// len and not nil: an empty file is as much "nobody adapted this" as a nil
+	// slice is, and handing "" to the JSON parser reports a malformed config for
+	// what is really a missing one.
+	case len(adaptedConfig) == 0:
+		bad("%s: the adapted configuration was not supplied, so what this route means is unchecked — scripts/check-jcloud.sh runs `caddy adapt` and passes it", routeRel)
+	default:
+		byHost, err := parseAdapted(adaptedConfig)
+		if err != nil {
+			bad("%s: %v", routeRel, err)
+		} else {
+			p = append(p, m.agreeRouteJSON(routeRel, byHost)...)
+		}
 	}
 	// backup.conf is optional: a service with no volume needing special treatment
 	// declares none and has no file. Absent with nothing to say is agreement.
@@ -149,56 +176,26 @@ func (m *Manifest) agreeCompose(at, body string) []string {
 	return p
 }
 
-func (m *Manifest) agreeRoute(at, body string) []string {
+// What the route's *source* has to say, as opposed to what it means. Everything
+// here is about a variable reference that the adapted configuration resolves away,
+// so it can only be asked of the text — and a `#` cannot fake it into passing,
+// because a missing variable is what fails, not a present string.
+func (m *Manifest) agreeRouteSource(at, body string) []string {
 	var p []string
-	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
-
-	// The upstream is the compose service name and the manifest's port. This is the
-	// assertion the symptom names: `caddy validate` proves the file parses and says
-	// nothing about whether anything listens where it points.
-	upstream := fmt.Sprintf("reverse_proxy %s:%d", m.Name, m.Port)
-	if n := strings.Count(body, upstream); n != len(m.Routes) {
-		bad("%s: %d block(s) proxy to %s:%d, and the manifest declares %d route(s)",
-			at, n, m.Name, m.Port, len(m.Routes))
-	}
-
 	for i, r := range m.Routes {
-		at := fmt.Sprintf("%s routes[%d]", at, i)
-		if !strings.Contains(body, "health_uri "+m.Health.Path) {
-			bad("%s: no health_uri %s — the edge would take an unhealthy upstream out of rotation on a different path than the deploy waits on", at, m.Health.Path)
-		}
-		for _, d := range r.Proxy {
-			// Whitespace-insensitive: the route is tab-indented inside its block
-			// and the manifest states the directive, not its indentation.
-			if !strings.Contains(squeeze(body), squeeze(d)) {
-				bad("%s: the proxy body does not carry %q, which the manifest declares", at, d)
-			}
-		}
 		// The hosts variable, whose name the log field separates when a service has
-		// more than one route.
+		// more than one route. Without it the addresses are baked into the file and
+		// a staging host is a copy of the route rather than a line in .env.
 		hostsVar := m.SCREAM() + "_HOSTS"
 		if r.Log != "" && r.Log != "access" {
 			hostsVar = m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
 		}
 		if !strings.Contains(body, "{$"+hostsVar+":") {
-			bad("%s: no address block reads {$%s:…}, so its hosts are not settable from .env", at, hostsVar)
-		}
-		for _, h := range r.Hosts {
-			if !strings.Contains(body, h) {
-				bad("%s: %s is declared by the manifest and does not appear here", at, h)
-			}
-		}
-		if r.MaxBody != "" && !strings.Contains(squeeze(body), "max_size "+r.MaxBody) {
-			bad("%s: no max_size %s", at, r.MaxBody)
+			p = append(p, fmt.Sprintf("%s routes[%d]: no address block reads {$%s:…}, so its hosts are not settable from .env",
+				at, i, hostsVar))
 		}
 	}
 	return p
-}
-
-// Collapse runs of whitespace so an assertion about a directive is not an assertion
-// about how the file is indented.
-func squeeze(s string) string {
-	return strings.Join(strings.Fields(s), " ")
 }
 
 func (m *Manifest) agreeBackupConf(at, body string) []string {
