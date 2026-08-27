@@ -38,7 +38,17 @@ func main() {
 			fmt.Fprintln(os.Stderr, "jcloud check: name at least one japode.yml")
 			os.Exit(2)
 		}
-		os.Exit(check(args[1:]))
+		os.Exit(check(args[1:], ""))
+	case "agree":
+		// The repository root is an argument and not derived from the manifest's
+		// path, because the manifest is read where it sits and the files it is
+		// compared against are found from the root — and a service adopted from
+		// another repository will not have the two in the same place.
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "jcloud agree <repository-root> <japode.yml> …")
+			os.Exit(2)
+		}
+		os.Exit(check(args[2:], args[1]))
 	case "version", "--version":
 		fmt.Printf("jcloud %s (schema version %d)\n", Version, SchemaVersion)
 	default:
@@ -51,16 +61,27 @@ func main() {
 func usage() {
 	fmt.Fprintf(os.Stderr, `jcloud %s — what a service declares (docs/JCLOUD.md)
 
-  jcloud check <japode.yml> …   refuse a manifest that does not state what a
-                               service must declare; every problem at once
-  jcloud version               this build, and the schema version it accepts
+  jcloud check <japode.yml> …          refuse a manifest that does not state
+                                       what a service must declare
+  jcloud agree <root> <japode.yml> …   that, and then compare it against the
+                                       compose file, the route, backup.conf and
+                                       .env.example deployed beside it
+  jcloud version                       this build, and the schema version
 
-render, init, adopt and up are specified in docs/JCLOUD.md and not implemented
-here — they are JC28, JC26's own scaffold, JC30 and JC30.
+Every problem is reported at once: a manifest is written in one sitting, and a
+caller who fixes one field and runs again has been sent round a loop this could
+have answered the first time.
+
+render, init, adopt and up are specified in docs/JCLOUD.md and not implemented.
 `, Version)
 }
 
-func check(paths []string) int {
+// check validates each manifest, and — when root is not empty — also compares it
+// against the files deployed beside it. One function for both because the second
+// question is only worth asking of a manifest that survived the first: a port that
+// is not a port disagrees with everything, and reporting that four times over is
+// noise standing where one answer belongs.
+func check(paths []string, root string) int {
 	bad := 0
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -78,9 +99,16 @@ func check(paths []string) int {
 		}
 
 		problems := m.Validate()
+		if len(problems) == 0 && root != "" {
+			problems = m.Agree(root)
+		}
 		if len(problems) == 0 {
-			fmt.Printf("  \033[32m✓\033[0m %s: %s, %d volume(s), %d route(s), %d variable(s)\n",
-				path, m.Name, len(m.Volumes), len(m.Routes), len(m.Env))
+			what := "states what it declares"
+			if root != "" {
+				what = "agrees with the files deployed beside it"
+			}
+			fmt.Printf("  \033[32m✓\033[0m %s: %s %s (%d volume(s), %d route(s), %d variable(s))\n",
+				path, m.Name, what, len(m.Volumes), len(m.Routes), len(m.Env))
 			continue
 		}
 
@@ -98,7 +126,11 @@ func check(paths []string) int {
 	}
 
 	if bad == 0 {
-		fmt.Printf("\n\033[32m%d manifest(s) state what they declare\033[0m\n", len(paths))
+		what := "state what they declare"
+		if root != "" {
+			what = "agree with the files deployed beside them"
+		}
+		fmt.Printf("\n\033[32m%d manifest(s) %s\033[0m\n", len(paths), what)
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "\n\033[31m%d of %d manifest(s) refused\033[0m\n", bad, len(paths))
