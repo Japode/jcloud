@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // Version is the tool's own, distinct from the schema's. Pinning it and asserting
@@ -58,7 +59,11 @@ func main() {
 		}
 		os.Exit(agree(rest[1:], rest[0], adapted))
 	case "version", "--version":
-		fmt.Printf("jcloud %s (schema version %d)\n", Version, SchemaVersion)
+		// The compiler is printed beside the tool's own version because it is the
+		// other half of what determines this binary's behaviour, and a report about
+		// a manifest is only traceable if both are known (JC31). runtime.Version()
+		// is what actually built this, not what go.mod asked for.
+		fmt.Printf("jcloud %s (schema version %d, built with %s)\n", Version, SchemaVersion, runtime.Version())
 	default:
 		fmt.Fprintf(os.Stderr, "jcloud: no such command %q\n\n", args[0])
 		usage()
