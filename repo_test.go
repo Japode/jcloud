@@ -130,6 +130,18 @@ func TestUnexpandedImageIsReportedAndNotAssumed(t *testing.T) {
 	}
 }
 
+// GitHub spells the repository the way its owner does and `${{ github.repository }}`
+// expands to exactly that; the registry takes only the lowered form, so the manifest
+// carries that one. They are one package and must not read as drift — this is the
+// shape that would have failed Japode/skillgist's own check against a manifest that
+// was correct.
+func TestCapitalisedRepositoryIsNotDrift(t *testing.T) {
+	p := agreeWithRepoIn(t, writeRepo(t, "", "", ""), "X/Paste")
+	if len(p) != 0 {
+		t.Fatalf("ghcr.io/X/Paste and ghcr.io/x/paste are one package, got:\n  %s", strings.Join(p, "\n  "))
+	}
+}
+
 // A Caddyfile is optional — a service that runs no stack of its own has none, and
 // absent with nothing to say is agreement.
 func TestRepositoryWithoutCaddyfileIsNotAFault(t *testing.T) {

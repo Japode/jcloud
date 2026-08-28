@@ -231,7 +231,13 @@ func (m *Manifest) agreeWorkflows(root, repository string) []string {
 		}
 
 		for _, ref := range ghcrRefRE.FindAllString(body, -1) {
-			if ref == m.Image {
+			// EqualFold and not ==: `${{ github.repository }}` expands to the name
+			// GitHub spells, capital and all, while the manifest carries the name
+			// the registry accepts — GHCR refuses an uppercase tag outright, so
+			// `ghcr.io/Owner/x` and `ghcr.io/owner/x` are one package written two
+			// ways and never drift. Whether the manifest itself may carry a capital
+			// is a different question, and Validate's.
+			if strings.EqualFold(ref, m.Image) {
 				found = true
 				continue
 			}
@@ -252,9 +258,10 @@ var githubRepositoryRE = regexp.MustCompile(`\$\{\{\s*github\.repository\s*\}\}`
 // and `image:` refuses both (see Validate). The character class stops at `:` and
 // `@` for exactly that reason.
 //
-// Case-insensitive although GHCR is not: a workflow that pushes `ghcr.io/Owner/x`
-// is broken, and reporting it as a disagreement with the manifest says so, where
-// skipping it would report the image as published by nothing.
+// Case-insensitive, because `${{ github.repository }}` expands to whatever
+// capitalisation GitHub holds and a workflow is right to write it that way — what
+// reaches the registry is lowered on the way. Matched here and compared with
+// EqualFold above, so two spellings of one package never read as drift.
 var ghcrRefRE = regexp.MustCompile(`(?i)ghcr\.io/[a-z0-9][a-z0-9._/-]*`)
 
 // dockerfileDirective returns the argument of every instance of one instruction,
