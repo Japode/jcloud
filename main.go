@@ -1,11 +1,17 @@
-// jcloud — the tool docs/JCLOUD.md specifies. This build implements one command.
+// jcloud — the tool docs/JCLOUD.md specifies. This build implements two commands.
 //
-//	jcloud check <japode.yml> [<japode.yml> …]
+//	jcloud check [--repo <root> [--repository <owner/name>]] <japode.yml> …
+//	jcloud agree [--adapted <caddy-adapt.json>] <root> <japode.yml> …
 //
 // `check` reads each manifest and refuses one that does not state what a service
-// must declare. It does not render, resolve a digest, or reach the network: those
-// are JC28, JC30 and JC29, and a check that needed any of them could not run on a
-// fork's pull request, which is where the interesting mistakes arrive.
+// must declare. With `--repo` it goes on to compare the manifest against the
+// service's own repository, which is the check that runs *there* (§JC27). `agree`
+// is the other direction: the manifest against the four files this repository
+// deploys beside it.
+//
+// Neither renders, resolves a digest, or reaches the network: those are JC30 and
+// JC29, and a check that needed any of them could not run on a fork's pull
+// request, which is where the interesting mistakes arrive.
 //
 // Exit codes are the whole contract, because a CI step reads nothing else: 0 every
 // manifest is valid, 1 at least one is not, 2 the arguments were wrong.
@@ -35,11 +41,7 @@ func main() {
 
 	switch args[0] {
 	case "check":
-		if len(args) < 2 {
-			fmt.Fprintln(os.Stderr, "jcloud check: name at least one japode.yml")
-			os.Exit(2)
-		}
-		os.Exit(run(args[1:], "", nil))
+		os.Exit(check(args[1:]))
 	case "agree":
 		// The repository root is an argument and not derived from the manifest's
 		// path, because the manifest is read where it sits and the files it is
@@ -76,6 +78,9 @@ func usage() {
 
   jcloud check <japode.yml> …          refuse a manifest that does not state
                                        what a service must declare
+  jcloud check --repo <root>           that, and then compare it against the
+       [--repository <owner/name>]     Dockerfile, Caddyfile and workflows of
+       <japode.yml> …                  the service's own repository
   jcloud agree <root> <japode.yml> …   that, and then compare it against the
                                        compose file, the route, backup.conf and
                                        .env.example deployed beside it
@@ -85,8 +90,36 @@ Every problem is reported at once: a manifest is written in one sitting, and a
 caller who fixes one field and runs again has been sent round a loop this could
 have answered the first time.
 
-render, init, adopt and up are specified in docs/JCLOUD.md and not implemented.
+init, adopt and up are specified in docs/JCLOUD.md and not implemented.
 `, Version)
+}
+
+// check parses its own flags rather than reaching for the flag package, which
+// would reorder the manifest paths behind them and print a usage message written
+// by somebody else.
+func check(args []string) int {
+	root, repository := "", ""
+	for len(args) >= 2 && (args[0] == "--repo" || args[0] == "--repository") {
+		if args[0] == "--repo" {
+			root = args[1]
+		} else {
+			repository = args[1]
+		}
+		args = args[2:]
+	}
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "jcloud check [--repo <root> [--repository <owner/name>]] <japode.yml> …")
+		return 2
+	}
+	if root == "" {
+		if repository != "" {
+			fmt.Fprintln(os.Stderr, "jcloud check: --repository names the repository --repo is rooted at, and there is no --repo")
+			return 2
+		}
+		return run(args, nil, "states what it declares", "state what they declare")
+	}
+	return run(args, func(m *Manifest) []string { return m.AgreeWithRepo(root, repository) },
+		"agrees with the repository it sits in", "agree with the repositories they sit in")
 }
 
 // agree reads the adapted configuration, if one was named, and hands it on.
@@ -99,15 +132,16 @@ func agree(paths []string, root, adaptedPath string) int {
 			return 2
 		}
 	}
-	return run(paths, root, adaptedConfig)
+	return run(paths, func(m *Manifest) []string { return m.AgreeWith(root, adaptedConfig) },
+		"agrees with the files deployed beside it", "agree with the files deployed beside them")
 }
 
-// run validates each manifest, and — when root is not empty — also compares it
-// against the files deployed beside it. One function for both because the second
-// question is only worth asking of a manifest that survived the first: a port that
-// is not a port disagrees with everything, and reporting that four times over is
-// noise standing where one answer belongs.
-func run(paths []string, root string, adaptedConfig []byte) int {
+// run validates each manifest and then, when compare is not nil, asks it the
+// second question. One function for all three modes because that second question
+// is only worth asking of a manifest that survived the first: a port that is not a
+// port disagrees with everything, and reporting that four times over is noise
+// standing where one answer belongs.
+func run(paths []string, compare func(*Manifest) []string, what, whatAll string) int {
 	bad := 0
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -125,14 +159,10 @@ func run(paths []string, root string, adaptedConfig []byte) int {
 		}
 
 		problems := m.Validate()
-		if len(problems) == 0 && root != "" {
-			problems = m.AgreeWith(root, adaptedConfig)
+		if len(problems) == 0 && compare != nil {
+			problems = compare(m)
 		}
 		if len(problems) == 0 {
-			what := "states what it declares"
-			if root != "" {
-				what = "agrees with the files deployed beside it"
-			}
 			fmt.Printf("  \033[32m✓\033[0m %s: %s %s (%d volume(s), %d route(s), %d variable(s))\n",
 				path, m.Name, what, len(m.Volumes), len(m.Routes), len(m.Env))
 			continue
@@ -152,11 +182,7 @@ func run(paths []string, root string, adaptedConfig []byte) int {
 	}
 
 	if bad == 0 {
-		what := "state what they declare"
-		if root != "" {
-			what = "agree with the files deployed beside them"
-		}
-		fmt.Printf("\n\033[32m%d manifest(s) %s\033[0m\n", len(paths), what)
+		fmt.Printf("\n\033[32m%d manifest(s) %s\033[0m\n", len(paths), whatAll)
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "\n\033[31m%d of %d manifest(s) refused\033[0m\n", bad, len(paths))
