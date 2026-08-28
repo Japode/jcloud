@@ -19,8 +19,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Only the shape this asserts against. Caddy's config is far larger; decoding the
@@ -45,12 +47,13 @@ type adaptedRoute struct {
 // proxy is what one route's reverse_proxy handler says, flattened out of the
 // subroute nesting Caddy produces.
 type proxy struct {
-	Upstreams []string
-	HealthURI string
-	MaxSize   int64
-	SetHeader map[string][]string
-	DelHeader []string
-	found     bool
+	Upstreams      []string
+	HealthURI      string
+	HealthInterval int64
+	MaxSize        int64
+	SetHeader      map[string][]string
+	DelHeader      []string
+	found          bool
 }
 
 func parseAdapted(data []byte) (map[string]*proxy, error) {
@@ -91,7 +94,8 @@ func walk(raw []json.RawMessage, p *proxy) {
 			} `json:"headers"`
 			HealthChecks struct {
 				Active struct {
-					URI string `json:"uri"`
+					URI      string `json:"uri"`
+					Interval int64  `json:"interval"`
 				} `json:"active"`
 			} `json:"health_checks"`
 			Upstreams []struct {
@@ -111,6 +115,7 @@ func walk(raw []json.RawMessage, p *proxy) {
 				p.Upstreams = append(p.Upstreams, u.Dial)
 			}
 			p.HealthURI = h.HealthChecks.Active.URI
+			p.HealthInterval = h.HealthChecks.Active.Interval
 			for k, v := range h.Headers.Request.Set {
 				p.SetHeader[k] = v
 			}
@@ -167,6 +172,14 @@ func (m *Manifest) agreeRouteJSON(at string, byHost map[string]*proxy) []string 
 			bad("%s: health_uri is %q, and the manifest declares %q — the edge would take an upstream out of rotation on a different path than the deploy waits on",
 				at, px.HealthURI, m.Health.Path)
 		}
+		// Caddy stores the interval in nanoseconds. Compared because it was in the
+		// route and in no schema, so nothing noticed it changing.
+		if want, err := nanosOf(m.Health.interval()); err != nil {
+			bad("%s: %v", at, err)
+		} else if px.HealthInterval != want {
+			bad("%s: health_interval is %s, and the manifest declares %s",
+				at, humanNanos(px.HealthInterval), m.Health.interval())
+		}
 		if r.MaxBody != "" {
 			switch n, err := bytesOf(r.MaxBody); {
 			case err != nil:
@@ -189,6 +202,39 @@ func (m *Manifest) agreeRouteJSON(at string, byHost map[string]*proxy) []string 
 func (px *proxy) agreeProxy(at string, directives []string) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
+
+	// The other direction, which this did not have: a header manipulation in the
+	// block that the manifest does not declare. Measured before it existed — an
+	// injected `header_up X-Secret-Admin true` passed, and the only thing that
+	// caught it was the upstream comparison, whose job exits 0 with no token.
+	//
+	// Built from the manifest's own list rather than from a set of names allowed
+	// here, so it stays right as the list changes. `health_uri` and
+	// `health_interval` are not in it and are not meant to be: they are derived
+	// from `health:` and compared above, which is why this looks at headers alone.
+	declaredSet := map[string]bool{}
+	declaredDel := map[string]bool{}
+	for _, d := range directives {
+		f := strings.Fields(d)
+		if len(f) < 2 || f[0] != "header_up" {
+			continue
+		}
+		if name := strings.TrimPrefix(f[1], "-"); strings.HasPrefix(f[1], "-") {
+			declaredDel[name] = true
+		} else {
+			declaredSet[name] = true
+		}
+	}
+	for name := range px.SetHeader {
+		if !declaredSet[name] {
+			bad("%s: the route sets %s and the manifest does not declare it — a header nobody declared is one nobody reviewed", at, name)
+		}
+	}
+	for _, name := range px.DelHeader {
+		if !declaredDel[name] {
+			bad("%s: the route strips %s and the manifest does not declare it", at, name)
+		}
+	}
 
 	for _, d := range directives {
 		f := strings.Fields(d)
@@ -237,6 +283,34 @@ var units = []struct {
 	{"KiB", 1 << 10}, {"MiB", 1 << 20}, {"GiB", 1 << 30},
 	{"KB", 1e3}, {"MB", 1e6}, {"GB", 1e9}, {"B", 1},
 }
+
+// Caddy stores a duration as nanoseconds in the adapted config. Parsed with the
+// same grammar the schema validates, so `15s` here and `15s` there are one fact.
+func nanosOf(d string) (int64, error) {
+	if !durationRE.MatchString(d) {
+		return 0, fmt.Errorf("health.interval %q is not a duration", d)
+	}
+	var total int64
+	for _, part := range regexp.MustCompile(`[0-9]+(ms|s|m|h)`).FindAllStringSubmatch(d, -1) {
+		n, err := strconv.ParseInt(strings.TrimSuffix(part[0], part[1]), 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("health.interval %q: %w", d, err)
+		}
+		switch part[1] {
+		case "ms":
+			total += n * int64(time.Millisecond)
+		case "s":
+			total += n * int64(time.Second)
+		case "m":
+			total += n * int64(time.Minute)
+		case "h":
+			total += n * int64(time.Hour)
+		}
+	}
+	return total, nil
+}
+
+func humanNanos(n int64) string { return time.Duration(n).String() }
 
 func bytesOf(size string) (int64, error) {
 	for _, u := range units {

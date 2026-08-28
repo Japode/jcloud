@@ -52,9 +52,26 @@ type Health struct {
 	// How the container probes itself. The three named probes render a compose
 	// `test:` for images that carry them; Test is the escape hatch for an image
 	// that carries none, and naming both is refused.
-	Probe       string   `yaml:"probe"`
-	Test        []string `yaml:"test"`
-	StartPeriod string   `yaml:"start_period"`
+	Probe string   `yaml:"probe"`
+	Test  []string `yaml:"test"`
+	// How long the *container* waits before its own healthcheck counts, and how
+	// often the *edge* asks. Two different things, and both were in the route or
+	// the compose file rather than here — `health_interval` in particular was
+	// declared nowhere at all, so nothing would have noticed it becoming 15m.
+	StartPeriod string `yaml:"start_period"`
+	Interval    string `yaml:"interval"`
+}
+
+// The edge's active health check interval, which the route carries and Caddy
+// defaults to 30s. Declared here so the proxy body is fully described and the
+// comparison against it can be strict (JC41).
+const DefaultHealthInterval = "15s"
+
+func (h *Health) interval() string {
+	if h.Interval == "" {
+		return DefaultHealthInterval
+	}
+	return h.Interval
 }
 
 type Volume struct {
@@ -200,6 +217,9 @@ func (h *Health) validate() []string {
 
 	if h.StartPeriod != "" && !durationRE.MatchString(h.StartPeriod) {
 		bad("health.start_period: %q is not a duration like 20s or 1m30s", h.StartPeriod)
+	}
+	if h.Interval != "" && !durationRE.MatchString(h.Interval) {
+		bad("health.interval: %q is not a duration like 15s or 1m30s", h.Interval)
 	}
 	return p
 }

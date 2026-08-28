@@ -266,6 +266,19 @@ func TestRouteDisagreements(t *testing.T) {
 		{"nothing proxies at all",
 			`"handler":"reverse_proxy"`, `"handler":"file_server"`,
 			"proxies to nothing"},
+		// JC41: the other direction. A header manipulation in the block that the
+		// manifest does not declare used to pass, and the only net was the
+		// upstream comparison, whose job exits 0 with no token.
+		{"the route sets a header nothing declares",
+			`"set":{"X-Forwarded-For":["{http.request.remote.host}"]}`,
+			`"set":{"X-Forwarded-For":["{http.request.remote.host}"],"X-Secret-Admin":["true"]}`,
+			"the route sets X-Secret-Admin and the manifest does not declare it"},
+		{"the route strips a header nothing declares",
+			`"delete":["X-View-Id"]`, `"delete":["X-View-Id","X-Real-IP"]`,
+			"the route strips X-Real-IP and the manifest does not declare it"},
+		{"health_interval drifted",
+			`"interval":15000000000`, `"interval":900000000000`,
+			"health_interval is 15m0s, and the manifest declares 15s"},
 	}
 
 	for _, c := range cases {
@@ -366,6 +379,37 @@ func TestFixedValueKeyIsReportedOnce(t *testing.T) {
 	}
 	if about != 1 {
 		t.Fatalf("expected exactly one problem about PASTE_DATABASE_PATH, got %d", about)
+	}
+}
+
+// health.interval is optional and defaults to what the route already carried. An
+// explicit value has to be honoured, or declaring the fact would change behaviour.
+func TestHealthIntervalDeclaredExplicitly(t *testing.T) {
+	root := write(t, "services/paste/japode.yml",
+		"  start_period: 10s", "  start_period: 10s\n  interval: 30s")
+	p := strings.Join(agreeIn(t, root, fixtureAdapted), "\n")
+	if !strings.Contains(p, "health_interval is 15s, and the manifest declares 30s") {
+		t.Fatalf("an explicit interval should be compared, got:\n%s", p)
+	}
+	// And the adapted config agreeing with it passes.
+	adapted := strings.Replace(fixtureAdapted, `"interval":15000000000`, `"interval":30000000000`, 1)
+	if p := agreeIn(t, root, adapted); len(p) != 0 {
+		t.Fatalf("30s declared and 30s adapted should agree, got:\n  %s", strings.Join(p, "\n  "))
+	}
+}
+
+func TestNanosOf(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want int64
+	}{{"15s", 15e9}, {"30s", 30e9}, {"1m30s", 90e9}, {"500ms", 5e8}, {"1h", 3600e9}} {
+		got, err := nanosOf(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("nanosOf(%q) = %d, %v; want %d", c.in, got, err, c.want)
+		}
+	}
+	if _, err := nanosOf("15 seconds"); err == nil {
+		t.Error("expected a non-duration to be an error")
 	}
 }
 
