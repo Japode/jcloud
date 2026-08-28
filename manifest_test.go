@@ -13,7 +13,7 @@ import (
 const valid = `
 version: 1
 name: skillgist
-image: ghcr.io/alegauss/skillgist
+image: ghcr.io/japode/skillgist
 port: 3000
 health:
   path: /api/health
@@ -109,12 +109,12 @@ func TestRejections(t *testing.T) {
 	}{
 		{"tagged image",
 			func(s string) string {
-				return strings.Replace(s, "image: ghcr.io/alegauss/skillgist", "image: ghcr.io/alegauss/skillgist:latest", 1)
+				return strings.Replace(s, "image: ghcr.io/japode/skillgist", "image: ghcr.io/japode/skillgist:latest", 1)
 			},
 			"carries a tag or a digest"},
 		{"digest image",
 			func(s string) string {
-				return strings.Replace(s, "image: ghcr.io/alegauss/skillgist", "image: ghcr.io/alegauss/skillgist@sha256:00", 1)
+				return strings.Replace(s, "image: ghcr.io/japode/skillgist", "image: ghcr.io/japode/skillgist@sha256:00", 1)
 			},
 			"carries a tag or a digest"},
 		{"name not a short name",
