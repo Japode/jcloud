@@ -117,6 +117,19 @@ func TestRejections(t *testing.T) {
 				return strings.Replace(s, "image: ghcr.io/japode/skillgist", "image: ghcr.io/japode/skillgist@sha256:00", 1)
 			},
 			"carries a tag or a digest"},
+		// The spelling GitHub hands a workflow, written into a manifest. GHCR
+		// answers `repository name must be lowercase` and the pull fails on the
+		// server, which is why it is refused at the file instead.
+		{"image with a capital in it",
+			func(s string) string {
+				return strings.Replace(s, "image: ghcr.io/japode/skillgist", "image: ghcr.io/Japode/skillgist", 1)
+			},
+			"is not a repository a registry will serve"},
+		{"image with a capital and no host",
+			func(s string) string {
+				return strings.Replace(s, "image: ghcr.io/japode/skillgist", "image: Japode/skillgist", 1)
+			},
+			"is not a repository a registry will serve"},
 		{"name not a short name",
 			func(s string) string { return strings.Replace(s, "name: skillgist", "name: SkillGist", 1) },
 			"is not a short name"},

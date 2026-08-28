@@ -123,6 +123,24 @@ var nameRE = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
 // two spellings of one variable is the drift this refuses.
 var envRE = regexp.MustCompile(`^[A-Z][A-Z0-9_]*$`)
 
+// The path of an image reference, which the OCI grammar holds to lower case. Two
+// components at most is not assumed: a registry may nest, and `ghcr.io/a/b/c` is a
+// repository like any other.
+var imagePathRE = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)*$`)
+
+// imagePath drops the registry host, which is not held to that rule: a hostname is
+// case-insensitive and `Ghcr.io` reaches the same registry as `ghcr.io`. Docker's
+// own test for whether the first component is a host is a dot, a colon, or the word
+// localhost — the colon cannot appear here, since a tag and a digest are already
+// refused above, so a port is refused with them.
+func imagePath(image string) string {
+	host, rest, found := strings.Cut(image, "/")
+	if found && (strings.Contains(host, ".") || host == "localhost") {
+		return rest
+	}
+	return image
+}
+
 // A duration compose and Caddy both accept. Deliberately narrow: `20s` and `1m30s`
 // pass, `20 s` and `20seconds` do not, because a value this tool passes through
 // without understanding is one the render discovers on the server.
@@ -174,6 +192,14 @@ func (m *Manifest) Validate() []string {
 		// .deploy-state/images.env by the deploy. A tag here would be a second
 		// place that decides which build runs, which is what §JC8 refused.
 		bad("image: %q carries a tag or a digest — the manifest names the repository, the deploy pins the digest", m.Image)
+	case !imagePathRE.MatchString(imagePath(m.Image)):
+		// A registry refuses an upper-case repository outright — GHCR answers
+		// `repository name must be lowercase` — so a manifest carrying one names
+		// an image nothing can pull, and the first thing to say so is a `docker
+		// pull` on the server, mid-deploy. Refused here and never lowered: this
+		// name decides which bytes run, and rewriting it quietly is the render
+		// §JC34 refused.
+		bad("image: %q is not a repository a registry will serve — after the host it is lower case, digits and . _ -", m.Image)
 	}
 
 	if m.Port == 0 {
