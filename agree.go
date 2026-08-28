@@ -113,6 +113,21 @@ func (m *Manifest) SCREAM() string {
 	return strings.ToUpper(strings.ReplaceAll(m.Name, "-", "_"))
 }
 
+// The variable an address block reads its hosts from. The log field is what
+// separates two routes on one service, so a manifest with one route spells it
+// `<SVC>_HOSTS` and a second route called `content` spells it
+// `<SVC>_CONTENT_HOSTS`.
+//
+// Derived here once because three checks ask for it — the route's source, the
+// .env.example entry, and the scan for keys nothing declares — and three copies of
+// one rule is the drift the whole comparison exists to end.
+func (m *Manifest) hostsVar(r Route) string {
+	if r.Log == "" || r.Log == "access" {
+		return m.SCREAM() + "_HOSTS"
+	}
+	return m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
+}
+
 func (m *Manifest) agreeCompose(at, body string) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
@@ -183,13 +198,7 @@ func (m *Manifest) agreeCompose(at, body string) []string {
 func (m *Manifest) agreeRouteSource(at, body string) []string {
 	var p []string
 	for i, r := range m.Routes {
-		// The hosts variable, whose name the log field separates when a service has
-		// more than one route. Without it the addresses are baked into the file and
-		// a staging host is a copy of the route rather than a line in .env.
-		hostsVar := m.SCREAM() + "_HOSTS"
-		if r.Log != "" && r.Log != "access" {
-			hostsVar = m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
-		}
+		hostsVar := m.hostsVar(r)
 		if !strings.Contains(body, "{$"+hostsVar+":") {
 			p = append(p, fmt.Sprintf("%s routes[%d]: no address block reads {$%s:…}, so its hosts are not settable from .env",
 				at, i, hostsVar))
@@ -284,13 +293,50 @@ func (m *Manifest) agreeEnvExample(at, body string) []string {
 	}
 
 	for _, r := range m.Routes {
-		key := m.SCREAM() + "_HOSTS"
-		if r.Log != "" && r.Log != "access" {
-			key = m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
-		}
+		key := m.hostsVar(r)
 		if !has(key) {
 			bad("%s: no %s=, so the addresses this route answers for cannot be changed without editing the route", at, key)
 		}
+	}
+
+	p = append(p, m.orphanEnvKeys(at, body)...)
+	return p
+}
+
+// The other direction, which backup.conf has had all along and this did not: a key
+// carrying this service's prefix that the manifest does not declare.
+//
+// It matters because .env.example is what a person reads when writing SERVICES_ENV.
+// A variable removed from a service leaves its key behind, and an orphan there is
+// worse than an absence — it looks deliberate, so somebody sets it and nothing
+// reads it.
+//
+// Scoped to this service's own prefix. A manifest knows what it declares and
+// nothing about what any other service or the edge does, so `ACME_EMAIL` and
+// `BACKUP_*` are not its business. Two services cannot collide here either: the
+// prefix ends in `_`, so `SKILL_` is not a prefix of `SKILLGIST_HOSTS`.
+func (m *Manifest) orphanEnvKeys(at, body string) []string {
+	var p []string
+
+	prefix := m.SCREAM() + "_"
+	// Every key the manifest accounts for, including the fixed ones. A fixed value
+	// has no business being here and the check above already says so by name —
+	// listing it as unaccounted for would report one mistake twice.
+	known := map[string]bool{}
+	for _, e := range m.Env {
+		known[prefix+e.Name] = true
+	}
+	for _, r := range m.Routes {
+		known[m.hostsVar(r)] = true
+	}
+
+	key := regexp.MustCompile(`^([A-Z][A-Z0-9_]*)=`)
+	for _, line := range strings.Split(body, "\n") {
+		match := key.FindStringSubmatch(line)
+		if match == nil || !strings.HasPrefix(match[1], prefix) || known[match[1]] {
+			continue
+		}
+		p = append(p, fmt.Sprintf("%s: %s= is not declared by the manifest — a key nobody reads is an invitation to set it", at, match[1]))
 	}
 	return p
 }

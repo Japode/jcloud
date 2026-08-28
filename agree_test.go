@@ -216,6 +216,10 @@ func TestDisagreements(t *testing.T) {
 			"PASTE_HOSTS=paste.example.com",
 			"PASTE_HOSTS=paste.example.com\nPASTE_DATABASE_PATH=/data/paste.db",
 			"it is not configurable"},
+		{"env.example carries a key nothing declares", ".env.example",
+			"PASTE_SITE_URL=https://paste.example.com",
+			"PASTE_SITE_URL=https://paste.example.com\nPASTE_LEGACY_FLAG=",
+			"PASTE_LEGACY_FLAG= is not declared by the manifest"},
 	}
 
 	for _, c := range cases {
@@ -286,6 +290,82 @@ func TestUnknownProxyDirectiveIsReported(t *testing.T) {
 	problems := strings.Join(agreeIn(t, root, fixtureAdapted), "\n")
 	if !strings.Contains(problems, "is not a directive this can check") {
 		t.Fatalf("expected the unknown directive to be reported, got:\n%s", problems)
+	}
+}
+
+// The scan for keys nothing declares is scoped to this service's prefix, and the
+// ways that goes wrong are all in one direction: flagging a key that is somebody
+// else's. Each of these must produce no problem at all.
+func TestOrphanScanMindsItsOwnBusiness(t *testing.T) {
+	for _, extra := range []string{
+		"ACME_EMAIL=ci@example.invalid",            // the edge's
+		"BACKUP_KEEP_HOURLY=8",                     // the platform's
+		"SKILLGIST_SITE_URL=https://skillgist.com", // another service's
+		"PASTEBIN_TOKEN=",                          // a longer name, not this prefix
+		"PASTE=",                                   // the bare name, no separator
+		"# PASTE_LEGACY_FLAG=",                     // commented out is not a key
+		"  PASTE_INDENTED=",                        // not at the start of a line
+	} {
+		t.Run(extra, func(t *testing.T) {
+			root := write(t, ".env.example",
+				"PASTE_SITE_URL=https://paste.example.com",
+				"PASTE_SITE_URL=https://paste.example.com\n"+extra)
+			if p := agreeIn(t, root, fixtureAdapted); len(p) != 0 {
+				t.Fatalf("%q is not this manifest's to complain about, got:\n  %s",
+					extra, strings.Join(p, "\n  "))
+			}
+		})
+	}
+}
+
+// A second route's hosts variable is declared by the route, not by env[], and the
+// scan has to know that or it reports the file it just asked for.
+func TestSecondRouteHostsKeyIsDeclared(t *testing.T) {
+	root := write(t, ".env.example",
+		"PASTE_HOSTS=paste.example.com",
+		"PASTE_HOSTS=paste.example.com\nPASTE_CONTENT_HOSTS=raw.paste.example.com")
+	// The fixture manifest has one route, so this key belongs to nobody yet.
+	if p := strings.Join(agreeIn(t, root, fixtureAdapted), "\n"); !strings.Contains(p, "PASTE_CONTENT_HOSTS") {
+		t.Fatalf("with one route declared, a content hosts key is an orphan; got:\n%s", p)
+	}
+	// Declare the second route and it becomes accounted for. The route also has to
+	// exist in the source and the adapted config, so this asserts only that the
+	// *key* stops being reported as undeclared.
+	root = write(t, "services/paste/japode.yml",
+		"    proxy:\n      - header_up X-Forwarded-For {remote_host}\n      - header_up -X-View-Id\n",
+		"    log: access\n    proxy:\n      - header_up X-Forwarded-For {remote_host}\n      - header_up -X-View-Id\n  - hosts: [raw.paste.example.com]\n    log: content\n    proxy:\n      - header_up -X-View-Id\n")
+	data, err := os.ReadFile(filepath.Join(root, "services", "paste", "japode.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Parse(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got := m.hostsVar(m.Routes[1]); got != "PASTE_CONTENT_HOSTS" {
+		t.Fatalf("hostsVar for the content route = %q, want PASTE_CONTENT_HOSTS", got)
+	}
+	if p := strings.Join(m.orphanEnvKeys(".env.example",
+		"PASTE_HOSTS=x\nPASTE_CONTENT_HOSTS=y\nPASTE_SITE_URL=z\n"), "\n"); p != "" {
+		t.Fatalf("both hosts keys are declared by routes; got:\n%s", p)
+	}
+}
+
+// A fixed value in .env.example is one mistake and must be reported once: the
+// specific check names it, and the orphan scan must not add a second line about
+// the same key.
+func TestFixedValueKeyIsReportedOnce(t *testing.T) {
+	root := write(t, ".env.example",
+		"PASTE_HOSTS=paste.example.com",
+		"PASTE_HOSTS=paste.example.com\nPASTE_DATABASE_PATH=/data/paste.db")
+	var about int
+	for _, problem := range agreeIn(t, root, fixtureAdapted) {
+		if strings.Contains(problem, "PASTE_DATABASE_PATH") {
+			about++
+		}
+	}
+	if about != 1 {
+		t.Fatalf("expected exactly one problem about PASTE_DATABASE_PATH, got %d", about)
 	}
 }
 
