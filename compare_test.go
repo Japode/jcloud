@@ -41,7 +41,7 @@ func TestProseAndKeyOrderAreNotDrift(t *testing.T) {
 
 // `doc:` is the one prose the schema itself carries, so the rule above cannot be
 // left to YAML comments alone. The service repository writes its manifest for its
-// own readers — alegauss/fes-nicepage documents every variable in pt-BR — and a
+// own readers — alegauss/fespsp-institucional documents every variable in pt-BR — and a
 // sentence nothing renders from is not a fact the two copies share.
 func TestADocumentedVariableMayBeDocumentedInAnotherLanguage(t *testing.T) {
 	p := compareValid(t, func(s string) string {
