@@ -6,7 +6,7 @@
 //
 // `check` reads each manifest and refuses one that does not state what a service
 // must declare. With `--repo` it goes on to compare the manifest against the
-// service's own repository, which is the check that runs *there* (§JC27). `agree`
+// service's own repository, which is the check that runs *there* (JC27). `agree`
 // is the other direction: the manifest against the four files this repository
 // deploys beside it. `compare` is the third: this repository's copy of a manifest
 // against the service's own, which is every shared fact in one question.
@@ -156,7 +156,7 @@ func agree(paths []string, root, adaptedPath string) int {
 //
 // It does not validate either. Whether a manifest states what a service must
 // declare is `check`'s question, and both copies already have a `check` of their
-// own — ours in this repository's CI, theirs in the service's (§JC27). Asking it a
+// own — ours in this repository's CI, theirs in the service's (JC27). Asking it a
 // third time here would report one broken field in two repositories and leave the
 // person fixing it wondering which one is authoritative.
 func compareManifests(oursPath, theirsPath string) int {

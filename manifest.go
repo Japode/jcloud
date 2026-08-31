@@ -196,7 +196,7 @@ func (m *Manifest) Validate() []string {
 	case strings.ContainsAny(m.Image, "@:"):
 		// The digest is resolved by whoever published it and pinned into
 		// .deploy-state/images.env by the deploy. A tag here would be a second
-		// place that decides which build runs, which is what §JC8 refused.
+		// place that decides which build runs, which is what JC8 refused.
 		bad("image: %q carries a tag or a digest — the manifest names the repository, the deploy pins the digest", m.Image)
 	case !imagePathRE.MatchString(imagePath(m.Image)):
 		// A registry refuses an upper-case repository outright — GHCR answers
@@ -204,7 +204,7 @@ func (m *Manifest) Validate() []string {
 		// an image nothing can pull, and the first thing to say so is a `docker
 		// pull` on the server, mid-deploy. Refused here and never lowered: this
 		// name decides which bytes run, and rewriting it quietly is the render
-		// §JC34 refused.
+		// JC34 refused.
 		bad("image: %q is not a repository a registry will serve — after the host it is lower case, digits and . _ -", m.Image)
 	}
 

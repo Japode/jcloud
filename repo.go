@@ -3,7 +3,7 @@
 // agree.go asks the other question: whether the manifest matches the four files
 // this repository deploys beside it. That check runs here, which is the wrong
 // place for it to fail — the port was changed by somebody in the service's
-// repository, whose own CI went green (§JC18). This one runs there, against the
+// repository, whose own CI went green (JC18). This one runs there, against the
 // Dockerfile, the standalone Caddyfile and the workflow that publishes the image,
 // so the person who made the change is the person who sees it fail.
 //
@@ -142,7 +142,7 @@ func (m *Manifest) volumeAt(path string) *Volume {
 // `{$SKILLGIST_HOSTS:…}` the platform derives — so a body comparison would have to
 // guess the pairing. scripts/check-upstream-routes.sh already compares those
 // bodies, in the repository that holds both copies of them and can see which is
-// which (§JC29).
+// which (JC29).
 func (m *Manifest) agreeCaddyfile(at, body string) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }

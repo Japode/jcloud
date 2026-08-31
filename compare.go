@@ -3,7 +3,7 @@
 // Every fact this repository shares with that one is in the manifest: the port,
 // the health path, the volume names, the variables and the route bodies. So one
 // comparison covers all of them, and a field added to the schema after this was
-// written is covered without a line changing here — which is the whole of §JC29,
+// written is covered without a line changing here — which is the whole of JC29,
 // and the reason it is not a second script shaped like the first.
 //
 // What it compares is meanings and not bytes. Both files are parsed and rendered

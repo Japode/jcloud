@@ -1,7 +1,7 @@
 // The other half of a service's declaration: what the platform brings along when
 // a manifest says it needs one.
 //
-// §JC32 left two questions to be answered before any of this was built. The first
+// JC32 left two questions to be answered before any of this was built. The first
 // — whether a provider is data this repository carries or something fetched from
 // elsewhere — is answered by this file existing: an addon is `addons/<type>/addon.yml`,
 // read from the tree, so the bytes a database runs on are in the same `git log` as
@@ -39,7 +39,7 @@ type Addon struct {
 	// rules are opposite because the pinning is: the deploy resolves and pins one
 	// `<SVC>_IMAGE` per service and knows nothing about this file, so an addon
 	// image that is a bare tag is the one container here whose bytes nothing
-	// decides — see §JC8, which is the same argument about the other half.
+	// decides — see JC8, which is the same argument about the other half.
 	Image string `yaml:"image"`
 	Port  int    `yaml:"port"`
 
