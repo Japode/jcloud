@@ -24,7 +24,26 @@ import (
 // Canon renders the manifest as the schema understands it: the struct's field
 // order, no comments, and nothing invented that the file did not say. Two
 // manifests that mean the same thing render to the same bytes.
-func (m *Manifest) Canon() ([]byte, error) { return yaml.Marshal(m) }
+//
+// Prose is dropped first, which is `doc:` and only `doc:`. It is a sentence for
+// whoever opens the file — nothing is rendered from it and `.Doc` is read nowhere
+// else in this tool — so it is a comment that happens to be a schema field, and
+// the rule above covers it: the copy in a pt-BR repository documents its variables
+// in Portuguese, and that is not drift.
+//
+// Dropped here rather than skipped in CompareTo, so the comparison stays one of
+// whole renderings and a field added to the schema is still compared without a
+// line changing (TestEveryFieldOfTheSchemaIsCompared).
+func (m *Manifest) Canon() ([]byte, error) {
+	c := *m
+	if c.Env != nil {
+		c.Env = append([]EnvVar(nil), m.Env...)
+		for i := range c.Env {
+			c.Env[i].Doc = ""
+		}
+	}
+	return yaml.Marshal(&c)
+}
 
 // CompareTo reports where two manifests disagree, one problem per differing line
 // and both sides shown.

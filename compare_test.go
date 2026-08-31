@@ -39,6 +39,41 @@ func TestProseAndKeyOrderAreNotDrift(t *testing.T) {
 	}
 }
 
+// `doc:` is the one prose the schema itself carries, so the rule above cannot be
+// left to YAML comments alone. The service repository writes its manifest for its
+// own readers — alegauss/fes-nicepage documents every variable in pt-BR — and a
+// sentence nothing renders from is not a fact the two copies share.
+func TestADocumentedVariableMayBeDocumentedInAnotherLanguage(t *testing.T) {
+	p := compareValid(t, func(s string) string {
+		return strings.Replace(s,
+			"doc: What the application says about itself.",
+			"doc: O que a aplicação diz sobre si mesma.", 1)
+	})
+	if len(p) != 0 {
+		t.Fatalf("a translated doc: is not drift, got:\n  %s", strings.Join(p, "\n  "))
+	}
+}
+
+// The exclusion is one field wide. Everything else about a variable is a fact the
+// server acts on, so it stays compared — this is what stops the line above from
+// being read as "variables are not compared".
+func TestTheRestOfAVariableIsStillCompared(t *testing.T) {
+	for _, c := range []struct{ name, from, to, want string }{
+		{"the name", "- name: SITE_URL", "- name: PUBLIC_URL", "PUBLIC_URL"},
+		{"the secret flag", "    secret: true", "    secret: false", "secret: false"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			p := compareValid(t, func(s string) string { return strings.Replace(s, c.from, c.to, 1) })
+			if len(p) == 0 {
+				t.Fatalf("%s drifted and the comparison said nothing", c.name)
+			}
+			if !strings.Contains(strings.Join(p, "\n"), c.want) {
+				t.Errorf("should name %q\ngot:\n  %s", c.want, strings.Join(p, "\n  "))
+			}
+		})
+	}
+}
+
 func TestComparisonFindsEveryKindOfDrift(t *testing.T) {
 	cases := []struct {
 		name  string
