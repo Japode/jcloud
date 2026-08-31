@@ -41,9 +41,9 @@ type Manifest struct {
 	Routes  []Route  `yaml:"routes"`
 	Env     []EnvVar `yaml:"env"`
 
-	// Declared from version 1 and refused when non-empty. The field exists now
-	// because adding it later is a breaking change to every manifest already
-	// written; what resolves a need is JC32.
+	// A dependency the platform brings along — a database, a cache. Declared from
+	// version 1 and refused when non-empty until JC32, which is what resolves one:
+	// each entry names a type, and addons/<type>/addon.yml is the provider.
 	Needs []Need `yaml:"needs"`
 }
 
@@ -109,6 +109,12 @@ type EnvVar struct {
 	Doc     string  `yaml:"doc"`
 }
 
+// Need is one dependency beside the service. The name is this service's word for
+// it — `db` — and everything derived from it carries the service's own name in
+// front, so two services needing a database get two of everything and never one
+// shared: `<service>-<need>` is the compose service, the volume and, with
+// `japode-` in front, the container. A database two services share is not
+// expressible here, on purpose (see tools/jcloud/addon.go).
 type Need struct {
 	Name string `yaml:"name"`
 	Type string `yaml:"type"`
@@ -213,11 +219,7 @@ func (m *Manifest) Validate() []string {
 	p = append(p, m.validateRoutes()...)
 	p = append(p, m.validateEnv()...)
 
-	if len(m.Needs) > 0 {
-		// Declared and refused on purpose: the field is in version 1 so that
-		// filling it in later is not a schema change, and nothing renders it yet.
-		bad("needs: is declared by the schema and not implemented — %d entr(y/ies) here would render nothing (JC32)", len(m.Needs))
-	}
+	p = append(p, m.validateNeeds()...)
 
 	return p
 }
@@ -333,6 +335,48 @@ func (m *Manifest) validateRoutes() []string {
 			if strings.ContainsAny(d, "{}") && !strings.Contains(d, "{remote_host}") {
 				bad("%s.proxy: %q carries a brace — these are directives inside the block, not the block", at, d)
 			}
+		}
+	}
+	return p
+}
+
+// Whether the type names a provider this platform has is not asked here: the
+// schema is what a manifest must state, and which addons exist is a fact about the
+// tree it is deployed in. `agree` reads addons/<type>/addon.yml and says so there,
+// which is also where `check --repo` correctly stays quiet — the service's own
+// repository has no addons/ directory and never will.
+func (m *Manifest) validateNeeds() []string {
+	var p []string
+	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
+
+	// A need and a volume both derive `<service>-<name>`, one as a volume and one
+	// as a compose service *and* a volume — so the same word twice is two things
+	// asking for one volume, and the loser is whichever compose file is merged
+	// second.
+	volumes := map[string]bool{}
+	for _, v := range m.Volumes {
+		volumes[v.Name] = true
+	}
+
+	seen := map[string]bool{}
+	for i, n := range m.Needs {
+		at := fmt.Sprintf("needs[%d]", i)
+		switch {
+		case n.Name == "":
+			bad("%s.name: is missing — it becomes the compose service %s-<name> and the volume of the same name", at, m.Name)
+		case !nameRE.MatchString(n.Name):
+			bad("%s.name: %q is not a short name", at, n.Name)
+		case seen[n.Name]:
+			bad("%s.name: %q is declared twice — one need, one name", at, n.Name)
+		case volumes[n.Name]:
+			bad("%s.name: %q is also a volume's name, and both derive the volume %s-%s", at, n.Name, m.Name, n.Name)
+		}
+		seen[n.Name] = true
+
+		if n.Type == "" {
+			bad("%s.type: is missing — it names the provider, addons/<type>/", at)
+		} else if !nameRE.MatchString(n.Type) {
+			bad("%s.type: %q is not a short name", at, n.Type)
 		}
 	}
 	return p

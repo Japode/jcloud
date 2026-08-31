@@ -182,11 +182,29 @@ func TestRejections(t *testing.T) {
 		{"lower case variable",
 			func(s string) string { return strings.Replace(s, "name: SITE_URL", "name: site_url", 1) },
 			"is not a variable name"},
-		{"needs is refused",
+		// JC32 made `needs:` mean something, so what is refused is no longer the
+		// field but the three ways an entry cannot be answered. Whether
+		// addons/<type>/ exists is not among them: the schema says what a manifest
+		// must state, and which providers a tree carries is `agree`'s question.
+		{"a need with no type",
 			func(s string) string {
-				return strings.Replace(s, "needs: []", "needs:\n  - name: cache\n    type: redis", 1)
+				return strings.Replace(s, "needs: []", "needs:\n  - name: db", 1)
 			},
-			"not implemented"},
+			"needs[0].type: is missing"},
+		{"a need named twice",
+			func(s string) string {
+				return strings.Replace(s, "needs: []",
+					"needs:\n  - name: db\n    type: mariadb\n  - name: db\n    type: mariadb", 1)
+			},
+			"is declared twice"},
+		// Both derive `skillgist-data`, one as a volume and one as a compose
+		// service that also declares a volume — so the file that is merged second
+		// takes the other's storage.
+		{"a need with a volume's name",
+			func(s string) string {
+				return strings.Replace(s, "needs: []", "needs:\n  - name: data\n    type: mariadb", 1)
+			},
+			"is also a volume's name"},
 		{"wrong schema version",
 			func(s string) string { return strings.Replace(s, "version: 1", "version: 2", 1) },
 			"this build accepts 1"},

@@ -56,9 +56,18 @@ func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
 		return string(data), true
 	}
 
+	// The providers first: what a need means is in addons/<type>/addon.yml, and
+	// both the compose comparison and the backup.conf one ask it. Resolved once so
+	// a type nobody provides is reported once rather than by every check that
+	// would have consulted it.
+	needs, problems := m.resolveNeeds(root)
+	p = append(p, problems...)
+
 	svcDir := filepath.Join("services", m.Name)
 	if compose, ok := read(filepath.Join(svcDir, "docker-compose.yml")); ok {
-		p = append(p, m.agreeCompose(filepath.ToSlash(filepath.Join(svcDir, "docker-compose.yml")), compose)...)
+		at := filepath.ToSlash(filepath.Join(svcDir, "docker-compose.yml"))
+		p = append(p, m.agreeCompose(at, compose)...)
+		p = append(p, m.agreeNeeds(at, compose, needs)...)
 	}
 	routeRel := filepath.ToSlash(filepath.Join("caddy", "sites", m.Name+".caddy"))
 	if route, ok := read(filepath.Join("caddy", "sites", m.Name+".caddy")); ok {
@@ -87,9 +96,9 @@ func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
 	conf, err := os.ReadFile(filepath.Join(root, svcDir, "backup.conf"))
 	switch {
 	case err == nil:
-		p = append(p, m.agreeBackupConf(confRel, string(conf))...)
-	case m.wantsBackupConf():
-		bad("%s: the manifest declares sqlite or exclude paths and this file is not there", confRel)
+		p = append(p, m.agreeBackupConf(confRel, string(conf), needs)...)
+	case m.wantsBackupConf(needs):
+		bad("%s: the manifest declares sqlite or exclude paths, or a need whose provider asks for a directive, and this file is not there", confRel)
 	}
 	if env, ok := read(".env.example"); ok {
 		p = append(p, m.agreeEnvExample(".env.example", env)...)
@@ -97,9 +106,24 @@ func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
 	return p
 }
 
-func (m *Manifest) wantsBackupConf() bool {
+// From the first line matching re to the end, or the whole thing when nothing
+// matches — an absence is reported by the assertion that was looking, not by this
+// silently narrowing to nothing.
+func firstFrom(body, re string) string {
+	if loc := regexp.MustCompile(re).FindStringIndex(body); loc != nil {
+		return body[loc[0]:]
+	}
+	return body
+}
+
+func (m *Manifest) wantsBackupConf(needs []resolvedNeed) bool {
 	for _, v := range m.Volumes {
 		if len(v.SQLite) > 0 || len(v.Exclude) > 0 {
+			return true
+		}
+	}
+	for _, n := range needs {
+		if n.addon != nil && n.addon.Volume.Backup != "" {
 			return true
 		}
 	}
@@ -148,10 +172,18 @@ func (m *Manifest) agreeCompose(at, body string) []string {
 	// The healthcheck has to probe the manifest's path *and* its port, because a
 	// healthcheck aimed at the wrong port is the failure `docker compose config`
 	// cannot see and a deploy discovers as a service that never turns healthy.
-	if i := strings.Index(body, "healthcheck:"); i < 0 {
+	//
+	// Read from this service's own `container_name:` forward, and not from the top
+	// of the file: since JC32 a compose file here can declare a second service —
+	// the need's database, with a healthcheck of its own — and the first
+	// `healthcheck:` in the file was then whichever of the two somebody wrote
+	// first. Anchored to the line so that `japode-paste` does not match
+	// `japode-paste-db`.
+	own := firstFrom(body, `(?m)^\s*container_name: `+regexp.QuoteMeta("japode-"+m.Name)+`\s*$`)
+	if i := strings.Index(own, "healthcheck:"); i < 0 {
 		bad("%s: no healthcheck:, so the deploy has nothing to wait on", at)
 	} else {
-		hc := body[i:]
+		hc := own[i:]
 		if !strings.Contains(hc, m.Health.Path) {
 			bad("%s: the healthcheck does not probe %s, which the manifest declares", at, m.Health.Path)
 		}
@@ -207,7 +239,7 @@ func (m *Manifest) agreeRouteSource(at, body string) []string {
 	return p
 }
 
-func (m *Manifest) agreeBackupConf(at, body string) []string {
+func (m *Manifest) agreeBackupConf(at, body string, needs []resolvedNeed) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -227,29 +259,69 @@ func (m *Manifest) agreeBackupConf(at, body string) []string {
 		}
 	}
 
+	// A need's volume takes whichever directive its provider asks for, and that
+	// directive names one word: the volume, which is also the compose service, so
+	// the line that says how to copy a database says it once. Which word it is
+	// belongs to the addon, because whoever writes `needs: [{type: mariadb}]` has
+	// no way of knowing that a live InnoDB directory cannot be copied.
+	for _, n := range needs {
+		if n.addon == nil || n.addon.Volume.Backup == "" {
+			continue
+		}
+		if !hasDirective(body, n.addon.Volume.Backup, n.svc) {
+			bad("%s: no `%s %s`, so the database addons/%s/addon.yml brings would be copied byte for byte, under its own writer",
+				at, n.addon.Volume.Backup, n.svc, n.need.Type)
+		}
+	}
+
 	// And the other direction: a line here that the manifest does not declare is a
 	// fact written in one place only, which is what this check exists to end.
 	for _, line := range strings.Split(body, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 3 || strings.HasPrefix(fields[0], "#") {
+		if len(fields) < 2 || strings.HasPrefix(fields[0], "#") {
 			continue
 		}
-		kind, key, path := fields[0], fields[1], fields[2]
-		if !m.declares(kind, key, path) {
-			bad("%s: `%s %s %s` is not declared by the manifest", at, kind, key, path)
+		if !m.declaresDirective(fields, needs) {
+			bad("%s: `%s` is not declared by the manifest", at, strings.Join(fields, " "))
 		}
 	}
 	return p
 }
 
-func hasDirective(body, kind, key, path string) bool {
+// hasDirective is one line, whole: the directive word and every field after it.
+// Variadic because a volume's directives take a path and a need's do not, and a
+// second function would be one more place the field count is written down.
+func hasDirective(body, kind string, want ...string) bool {
 	for _, line := range strings.Split(body, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) >= 3 && fields[0] == kind && fields[1] == key && fields[2] == path {
+		if len(fields) != len(want)+1 || fields[0] != kind {
+			continue
+		}
+		same := true
+		for i, w := range want {
+			if fields[i+1] != w {
+				same = false
+				break
+			}
+		}
+		if same {
 			return true
 		}
 	}
 	return false
+}
+
+func (m *Manifest) declaresDirective(fields []string, needs []resolvedNeed) bool {
+	kind, key := fields[0], fields[1]
+	if len(fields) == 2 {
+		for _, n := range needs {
+			if n.addon != nil && n.addon.Volume.Backup == kind && n.svc == key {
+				return true
+			}
+		}
+		return false
+	}
+	return m.declares(kind, key, fields[2])
 }
 
 func (m *Manifest) declares(kind, key, path string) bool {
