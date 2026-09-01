@@ -1,6 +1,7 @@
 // jcloud — the tool docs/JCLOUD.md specifies. This build implements three commands.
 //
-//	jcloud check [--repo <root> [--repository <owner/name>]] <japode.yml> …
+//	jcloud check [--repo <root> [--repository <owner/name>]
+//	             [--dockerfile <path>] [--caddyfile <path>]] <japode.yml> …
 //	jcloud agree [--adapted <caddy-adapt.json>] <root> <japode.yml> …
 //	jcloud compare <ours.yml> <theirs.yml>
 //
@@ -94,7 +95,9 @@ func usage() {
                                        what a service must declare
   jcloud check --repo <root>           that, and then compare it against the
        [--repository <owner/name>]     Dockerfile, Caddyfile and workflows of
-       <japode.yml> …                  the service's own repository
+       [--dockerfile <path>]           the service's own repository — the two
+       [--caddyfile <path>]            paths are relative to <root> and default
+       <japode.yml> …                  to that file's name in it
   jcloud agree <root> <japode.yml> …   that, and then compare it against the
                                        compose file, the route, backup.conf and
                                        .env.example deployed beside it
@@ -115,26 +118,50 @@ init, adopt and up are specified in docs/JCLOUD.md and not implemented.
 // by somebody else.
 func check(args []string) int {
 	root, repository := "", ""
-	for len(args) >= 2 && (args[0] == "--repo" || args[0] == "--repository") {
-		if args[0] == "--repo" {
+	var layout RepoLayout
+flags:
+	for len(args) >= 2 {
+		switch args[0] {
+		case "--repo":
 			root = args[1]
-		} else {
+		case "--repository":
 			repository = args[1]
+		// Both relative to --repo, both defaulting to the file's own name there.
+		// A repository that builds its image from a context below its root keeps
+		// the Dockerfile in it, and until JC87 that repository could not run this
+		// check at all.
+		case "--dockerfile":
+			layout.Dockerfile = args[1]
+		case "--caddyfile":
+			layout.Caddyfile = args[1]
+		default:
+			break flags // not a flag: the manifests start here
 		}
 		args = args[2:]
 	}
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "jcloud check [--repo <root> [--repository <owner/name>]] <japode.yml> …")
+		fmt.Fprintln(os.Stderr, "jcloud check [--repo <root> [--repository <owner/name>] [--dockerfile <path>] [--caddyfile <path>]] <japode.yml> …")
 		return 2
 	}
 	if root == "" {
-		if repository != "" {
-			fmt.Fprintln(os.Stderr, "jcloud check: --repository names the repository --repo is rooted at, and there is no --repo")
-			return 2
+		// The three say the same thing about the same missing flag, so they are one
+		// message: --repo is what makes this the repository check, and anything
+		// qualifying it without one is a caller that meant to pass it. In a fixed
+		// order, because a message that changes between runs of the same wrong
+		// command reads as two different defects.
+		for _, f := range []struct{ name, value string }{
+			{"--repository", repository},
+			{"--dockerfile", layout.Dockerfile},
+			{"--caddyfile", layout.Caddyfile},
+		} {
+			if f.value != "" {
+				fmt.Fprintf(os.Stderr, "jcloud check: %s qualifies the repository --repo is rooted at, and there is no --repo\n", f.name)
+				return 2
+			}
 		}
 		return run(args, nil, "states what it declares", "state what they declare")
 	}
-	return run(args, func(m *Manifest) []string { return m.AgreeWithRepo(root, repository) },
+	return run(args, func(m *Manifest) []string { return m.AgreeWithRepo(root, repository, layout) },
 		"agrees with the repository it sits in", "agree with the repositories they sit in")
 }
 

@@ -111,7 +111,21 @@ func agreeWithRepoIn(t *testing.T, root, repository string) []string {
 	if p := m.Validate(); len(p) != 0 {
 		t.Fatalf("the fixture manifest is not even valid:\n  %s", strings.Join(p, "\n  "))
 	}
-	return m.AgreeWithRepo(root, repository)
+	return m.AgreeWithRepo(root, repository, RepoLayout{})
+}
+
+// The same, for a repository that does not keep its files at its root.
+func agreeWithRepoLayout(t *testing.T, root, repository string, layout RepoLayout) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, "japode.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Parse(data)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	return m.AgreeWithRepo(root, repository, layout)
 }
 
 func TestFixtureRepositoryAgreesWithItself(t *testing.T) {
@@ -228,6 +242,40 @@ func TestMissingDockerfileIsReported(t *testing.T) {
 	p := strings.Join(agreeWithRepoIn(t, root, fixtureRepository), "\n")
 	if !strings.Contains(p, "Dockerfile:") {
 		t.Fatalf("expected the missing Dockerfile to be reported, got:\n%s", p)
+	}
+}
+
+// A repository that keeps neither file at its root. fespsp-institucional builds one
+// image from two checkouts and keeps its Dockerfile under the build context that
+// needs it, so the literal path this used to join refused that repository outright
+// and asserted nothing about the port it exists to assert (JC87).
+//
+// Both files are moved in one case, because the defect was one defect: the Caddyfile
+// was optional, so a caller pointing elsewhere got silence and a pass rather than a
+// refusal — which is worse than the Dockerfile's loud failure, not better.
+func TestFilesBelowTheRootAreFoundWhereTheCallerSaysTheyAre(t *testing.T) {
+	root := writeRepo(t, "", "", "")
+	moved := map[string]string{"Dockerfile": "docker/production/Dockerfile", "Caddyfile": "docker/Caddyfile"}
+	for from, to := range moved {
+		dest := filepath.Join(root, filepath.FromSlash(to))
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(root, from), dest); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	layout := RepoLayout{Dockerfile: moved["Dockerfile"], Caddyfile: moved["Caddyfile"]}
+	if p := agreeWithRepoLayout(t, root, fixtureRepository, layout); len(p) != 0 {
+		t.Fatalf("the fixture should agree with itself wherever its files are, got:\n  %s", strings.Join(p, "\n  "))
+	}
+
+	// And the zero value still means the root, so the caller that knows of no such
+	// repository is unaffected — reported at the path it actually looked in.
+	p := strings.Join(agreeWithRepoIn(t, root, fixtureRepository), "\n")
+	if !strings.Contains(p, "Dockerfile:") {
+		t.Fatalf("expected the root Dockerfile to be reported missing, got:\n%s", p)
 	}
 }
 

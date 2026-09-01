@@ -32,6 +32,36 @@ import (
 // answer (JC41).
 const caddyDefaultHealthInterval = "30s"
 
+// RepoLayout is where in the repository the two files this reads by name are.
+//
+// Both were literals until one repository put them somewhere else. skillgist keeps
+// its Dockerfile at its root, so `filepath.Join(root, "Dockerfile")` was correct
+// every time anyone ran this; fespsp-institucional builds one image from two
+// checkouts and keeps it at `docker/production/Dockerfile`, and the check refused on
+// the path rather than asserting anything about the port it exists to assert (JC87).
+//
+// Paths passed in, and not a field in the manifest. Where a repository keeps its
+// build context is not a fact it shares with the platform: `agree` compares the four
+// files deployed on this side, and a field that means nothing here is a field that
+// goes stale here.
+//
+// The empty string is each file's own name at the root, so a caller that knows of no
+// such repository passes a zero value and gets what it always got.
+type RepoLayout struct {
+	Dockerfile string
+	Caddyfile  string
+}
+
+func (l RepoLayout) dockerfile() string { return orDefault(l.Dockerfile, "Dockerfile") }
+func (l RepoLayout) caddyfile() string  { return orDefault(l.Caddyfile, "Caddyfile") }
+
+func orDefault(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
 // AgreeWithRepo reports every disagreement between the manifest and the repository
 // it sits in.
 //
@@ -39,24 +69,35 @@ const caddyDefaultHealthInterval = "30s"
 // parameter and not read from a file because no file in the repository states it:
 // a workflow writes `ghcr.io/${{ github.repository }}` and the value arrives from
 // Actions. Unsupplied, an image named that way is reported as unchecked.
-func (m *Manifest) AgreeWithRepo(root, repository string) []string {
+func (m *Manifest) AgreeWithRepo(root, repository string, layout RepoLayout) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
-	dockerfile, err := os.ReadFile(filepath.Join(root, "Dockerfile"))
+	// Reported at the path the caller named, never at the default: "no such file:
+	// Dockerfile" in a repository that has one under docker/ sends its reader
+	// looking for the wrong defect.
+	at := layout.dockerfile()
+	dockerfile, err := os.ReadFile(filepath.Join(root, at))
 	if err != nil {
 		// The one file that is not optional. The manifest promises the platform an
 		// image built from this repository, and nothing else here states its port.
-		bad("Dockerfile: %v", err)
+		bad("%s: %v", at, err)
 	} else {
-		p = append(p, m.agreeDockerfile("Dockerfile", string(dockerfile))...)
+		p = append(p, m.agreeDockerfile(at, string(dockerfile))...)
 	}
 
 	// Optional: a service that runs no stack of its own has no Caddyfile, and
 	// absent with nothing to say is agreement — the same rule backup.conf gets in
 	// agree.go.
-	if caddyfile, err := os.ReadFile(filepath.Join(root, "Caddyfile")); err == nil {
-		p = append(p, m.agreeCaddyfile("Caddyfile", string(caddyfile))...)
+	//
+	// Which is why this one takes the caller's path too, and is the reason it is in
+	// this struct rather than only the Dockerfile JC87 names. A caller pointing the
+	// route comparison at `docker/Caddyfile` while this looked for one at the root
+	// would find none, say nothing, and pass — a silent skip, which is the shape
+	// JC66 refuses.
+	ca := layout.caddyfile()
+	if caddyfile, err := os.ReadFile(filepath.Join(root, ca)); err == nil {
+		p = append(p, m.agreeCaddyfile(ca, string(caddyfile))...)
 	}
 
 	p = append(p, m.agreeWorkflows(root, repository)...)
