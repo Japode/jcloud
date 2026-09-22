@@ -1,9 +1,10 @@
-// jcloud — the tool docs/JCLOUD.md specifies. This build implements three commands.
+// jcloud — the tool docs/JCLOUD.md specifies. This build implements four commands.
 //
 //	jcloud check [--repo <root> [--repository <owner/name>]
 //	             [--dockerfile <path>] [--caddyfile <path>]] <japode.yml> …
 //	jcloud agree [--adapted <caddy-adapt.json>] <root> <japode.yml> …
 //	jcloud compare <ours.yml> <theirs.yml>
+//	jcloud env <verb> …
 //
 // `check` reads each manifest and refuses one that does not state what a service
 // must declare. With `--repo` it goes on to compare the manifest against the
@@ -12,11 +13,16 @@
 // deploys beside it. `compare` is the third: this repository's copy of a manifest
 // against the service's own, which is every shared fact in one question.
 //
-// None of them renders, resolves a digest, or reaches the network. That is JC30's,
-// and it is why `compare` takes two paths rather than a repository: a check that
-// needed the network could not run on a fork's pull request, which is where the
-// interesting mistakes arrive. The fetching lives in the script that holds the
-// token, scripts/check-upstream-manifest.sh.
+// Those three are about a manifest, and none of them renders, resolves a digest or
+// reaches the network. That is JC30's, and it is why `compare` takes two paths
+// rather than a repository: a check that needed the network could not run on a
+// fork's pull request, which is where the interesting mistakes arrive. The fetching
+// lives in the script that holds the token, scripts/check-upstream-manifest.sh.
+//
+// `env` is about none of that. It is the configuration — .env.age, where a key is
+// readable and its value is not (JC92) — and it is here rather than in a script
+// beside the others because it needs age, and this is what already arrives with a
+// pinned toolchain. It reads no manifest and the three above read no configuration.
 //
 // Exit codes are the whole contract, because a CI step reads nothing else: 0 every
 // manifest is valid, 1 at least one is not, 2 the arguments were wrong.
@@ -75,6 +81,13 @@ func main() {
 			os.Exit(2)
 		}
 		os.Exit(compareManifests(rest[0], rest[1]))
+	case "env":
+		// The only command here that is about configuration rather than about a
+		// manifest, and the only one that writes a file. Both are deliberate and
+		// neither reverses JC34: what that refused is rendering the four
+		// hand-written files from a manifest, and .env was never one of them —
+		// it is rendered from a secret today, by the workflow.
+		os.Exit(envCmd(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
 		// other half of what determines this binary's behaviour, and a report about
@@ -103,6 +116,9 @@ func usage() {
                                        .env.example deployed beside it
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
+  jcloud env <verb>                    the configuration in .env.age: list, get,
+                                       set, unset, render — "jcloud env" alone
+                                       prints the verbs and their flags
   jcloud version                       this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a
