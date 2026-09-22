@@ -81,6 +81,11 @@ func main() {
 			os.Exit(2)
 		}
 		os.Exit(compareManifests(rest[0], rest[1]))
+	case "survey":
+		// Takes the observations as a file and reaches no network, the division
+		// JC29 already made for `compare` — scripts/survey-server.sh holds the SSH
+		// credential and does the reading.
+		os.Exit(survey(args[1:]))
 	case "up":
 		// Reports and brings nothing up: naming what stands in the way is the half
 		// of JC30 that is built, and handing a digest to scripts/deploy.sh is not.
@@ -120,6 +125,9 @@ func usage() {
                                        .env.example deployed beside it
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
+  jcloud survey [--root <dir>]         the server, as scripts/survey-server.sh
+       <observations>                  observed it, against what services/*/
+                                       declares. Reads a file, not a host.
   jcloud up [<service> …]              what stands between each service and a
        [--root <dir>] [--env <path>]   deploy: the variables its manifest
        [--state <path>]                declares and the configuration lacks, and
