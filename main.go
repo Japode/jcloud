@@ -81,6 +81,10 @@ func main() {
 			os.Exit(2)
 		}
 		os.Exit(compareManifests(rest[0], rest[1]))
+	case "up":
+		// Reports and brings nothing up: naming what stands in the way is the half
+		// of JC30 that is built, and handing a digest to scripts/deploy.sh is not.
+		os.Exit(up(args[1:]))
 	case "env":
 		// The only command here that is about configuration rather than about a
 		// manifest, and the only one that writes a file. Both are deliberate and
@@ -116,6 +120,11 @@ func usage() {
                                        .env.example deployed beside it
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
+  jcloud up [<service> …]              what stands between each service and a
+       [--root <dir>] [--env <path>]   deploy: the variables its manifest
+       [--state <path>]                declares and the configuration lacks, and
+                                       whether a digest is pinned. Brings
+                                       nothing up.
   jcloud env <verb>                    the configuration in .env.age: list, get,
                                        set, unset, render — "jcloud env" alone
                                        prints the verbs and their flags
