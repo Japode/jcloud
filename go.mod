@@ -8,16 +8,17 @@ module github.com/Japode/cloud/tools/jcloud
 // It has to agree with the digest scripts/check-jcloud.sh pins the golang image at,
 // and that script asserts the two rather than trusting them — a comment saying they
 // agree is a comment that goes stale on the first image bump.
-go 1.23
+go 1.25.0
 
-toolchain go1.23.12
+toolchain go1.26.8
 
 require (
-	filippo.io/age v1.2.1
+	filippo.io/age v1.3.2
 	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
-	golang.org/x/crypto v0.24.0 // indirect
-	golang.org/x/sys v0.21.0 // indirect
+	filippo.io/hpke v0.4.0 // indirect
+	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 )
