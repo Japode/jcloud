@@ -151,16 +151,23 @@ func pinnedDigest(m *Manifest, body string) string {
 // ignored rather than refused, so a collector that learns to report something more is
 // not a collector this build stops reading.
 //
+//	gathered   at         2026-09-23T12:00:00Z
 //	published  <service>  ghcr.io/owner/name@sha256:…
 //	tag        <service>  latest
 //	unpublished <service> never
 //
 // The digest is the value, never a tag this resolves: `tag` lines are reported so a
 // reader can see which build was picked and are not what picks it (JC8).
+//
+// The stamp is not decoration. What this file says was true when it was gathered and
+// at no other moment, so a reader deciding whether to deploy has to be told how old
+// the answer is — a record the last deploy left behind is the usual case (JC99), and
+// it is exactly as convincing as its date.
 type Published struct {
 	Ref  map[string]string   // service -> <image>@sha256:…
 	Tags map[string][]string // service -> the tags that version carries
 	None map[string]string   // service -> the word saying why nothing was published
+	When string              // when it was gathered, as the collector stamped it
 }
 
 func ParsePublished(body string) *Published {
@@ -177,6 +184,8 @@ func ParsePublished(body string) *Published {
 			p.Tags[f[1]] = append(p.Tags[f[1]], f[2])
 		case "unpublished":
 			p.None[f[1]] = f[2]
+		case "gathered":
+			p.When = f[2]
 		}
 	}
 	return p
@@ -289,6 +298,15 @@ func up(args []string) int {
 			return 2
 		}
 		pub = ParsePublished(string(body))
+		// Said once, at the top, before any digest below is read as current. An
+		// unstamped record is named as such rather than passed over: it came from
+		// something older than the stamp, and "no date" is a worse answer than an
+		// old one only when nobody says so.
+		if pub.When != "" {
+			fmt.Printf("  the publisher was asked at %s (%s)\n", pub.When, filepath.Base(publishedPath))
+		} else {
+			fmt.Printf("  %s carries no date — what it says was true whenever it was gathered\n", filepath.Base(publishedPath))
+		}
 	}
 
 	if len(services) == 0 {

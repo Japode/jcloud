@@ -173,6 +173,15 @@ published
 	if len(p.Ref) != 1 || len(p.None) != 1 {
 		t.Fatalf("an unknown kind or a short line was read as a fact: %+v", p)
 	}
+	// The stamp is the one line that is about the file rather than about a service.
+	// Without it a record the last deploy left behind reads exactly like one gathered
+	// a minute ago, which is the whole difficulty with keeping it on the machine.
+	if p.When != "2026-09-23T12:00:00Z" {
+		t.Fatalf("the record's date was not read: %q", p.When)
+	}
+	if ParsePublished("published x ghcr.io/a/b@sha256:1\n").When != "" {
+		t.Fatal("an undated record claimed a date")
+	}
 }
 
 // The half of JC30 this is: the digest arrives from the party that published it, with
