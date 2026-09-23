@@ -132,6 +132,22 @@ func TestAddonsAndTheEdgeAreDeclaredAndNotStrangers(t *testing.T) {
 	}
 }
 
+// A bootstrapped server that has never been deployed to is a real state, not a broken
+// reading, and the answer worth giving about it is that everything declared is absent.
+// Measured on the lab VM, where the first draft refused to survey at all.
+func TestAServerWithNothingDeployedReportsEverythingMissing(t *testing.T) {
+	o := ParseObserved("timer japode-backup inactive\npath deploy-dir 750 runner:runner\n")
+	d := SurveyAgainst(Declared{Services: []string{"skillgist"}, Others: []string{"caddy"}}, o)
+	if len(d) != 2 {
+		t.Fatalf("expected both to be reported absent, got %+v", d)
+	}
+	for _, one := range d {
+		if !strings.Contains(one.Says, "not running") {
+			t.Fatalf("a container on a server running nothing was not reported absent: %+v", one)
+		}
+	}
+}
+
 // The format is three fields a shell script prints and this reads. A line that is
 // neither, and a kind this does not know, are ignored rather than refused: the
 // collector reports machine facts this does not compare.

@@ -274,11 +274,17 @@ func survey(args []string) int {
 		return 2
 	}
 	o := ParseObserved(string(body))
-	if len(o.Containers) == 0 {
-		// Nothing observed is not agreement. A collector that failed to reach the
-		// host, or reached it and read nothing, would otherwise report a server in
-		// perfect agreement with the repository — the silence JC66 is about.
-		fmt.Fprintf(os.Stderr, "jcloud survey: %s names no container at all — that is a collector that did not reach the host, not a server with nothing on it\n", observations)
+	// An empty file is refused and an empty *server* is not, which is a distinction
+	// the first draft got wrong: it read "no containers" as a collector that never
+	// reached the host, and so refused to survey a machine that had been bootstrapped
+	// and not yet deployed to — a real state, and one worth a real answer.
+	//
+	// It is safe to be this permissive here because the failure is loud: a server
+	// running nothing reports every declared service as not running, which is red.
+	// The silence JC66 warns about would be the opposite, and cannot arise — and the
+	// collector refuses an empty answer from the host before it ever writes this file.
+	if strings.TrimSpace(string(body)) == "" {
+		fmt.Fprintf(os.Stderr, "jcloud survey: %s is empty — that is a collector that gathered nothing, not a server in agreement\n", observations)
 		return 2
 	}
 
