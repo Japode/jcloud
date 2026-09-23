@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -143,6 +144,51 @@ func mustRead(t *testing.T, path string) []byte {
 		t.Fatalf("reading %s: %v", path, err)
 	}
 	return data
+}
+
+// The coupling the two comments above assert in prose, asserted here against the file:
+// the class scripts/check-env.sh's `sed` picks a key out with, compiled and run over a
+// store this package wrote.
+//
+// Both sides were right and neither was checked. A `[A-Z][A-Z0-9_]*` narrowed over
+// there — or a store that grew a prefix over here — would leave the coverage check
+// reading a file it finds no keys in, and finding no keys is how that script reports a
+// configuration that carries every one of them (JC92).
+//
+// The class is lifted from the script rather than written out again, which is the whole
+// point: a copy here would agree with a comment and not with what runs.
+func TestCheckEnvReadsTheKeysThisPackageWrites(t *testing.T) {
+	script, err := os.ReadFile(filepath.Join("..", "..", "scripts", "check-env.sh"))
+	if err != nil {
+		t.Fatalf("scripts/check-env.sh is the reader under test: %v", err)
+	}
+	// `sed -n 's/^\(<class>\)=.*/\1/p'`, and only that line: the script has one.
+	lifted := regexp.MustCompile(`s/\^\\\((.+?)\\\)=`).FindSubmatch(script)
+	if lifted == nil {
+		t.Fatal("no `sed -n 's/^\\(…\\)=.*/\\1/p'` in scripts/check-env.sh — this test cannot see what it reads keys with")
+	}
+	// A POSIX bracket expression of this shape is the same text in Go's syntax, so
+	// nothing is translated. A class that stopped being both would fail to compile
+	// here, which is the honest outcome: it is no longer a class two readers share.
+	reader, err := regexp.Compile(`(?m)^` + string(lifted[1]) + `=`)
+	if err != nil {
+		t.Fatalf("check-env.sh reads keys with %q, which is not a class this can compile: %v", lifted[1], err)
+	}
+
+	path, _, _ := newStore(t)
+	store := mustRead(t, path)
+	found := reader.FindAllString(string(store), -1)
+	if len(found) != 1 || !strings.HasPrefix(found[0], "ACME_EMAIL") {
+		t.Fatalf("check-env.sh's reader finds %v in a store holding exactly ACME_EMAIL:\n%s", found, store)
+	}
+	// And it reads no recipient line as a key. `recipient age1…` has no `=` at all
+	// today; a format that gave it one would put an unchecked pseudo-key into every
+	// coverage report.
+	for _, line := range ParseEnvFile(store).RecipientLines() {
+		if reader.MatchString(line) {
+			t.Fatalf("check-env.sh's reader takes %q for a key", line)
+		}
+	}
 }
 
 // A key outside the shape scripts/check-env.sh reads is a key nothing checks. Refused
