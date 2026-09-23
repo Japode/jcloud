@@ -87,8 +87,9 @@ func main() {
 		// credential and does the reading.
 		os.Exit(survey(args[1:]))
 	case "up":
-		// Reports and brings nothing up: naming what stands in the way is the half
-		// of JC30 that is built, and handing a digest to scripts/deploy.sh is not.
+		// Reports and brings nothing up. `--published` is what makes the digest
+		// resolved rather than pasted, and it is a file for `survey`'s reason: the
+		// asking belongs in scripts/published-digests.sh, which holds the token.
 		os.Exit(up(args[1:]))
 	case "env":
 		// The only command here that is about configuration rather than about a
@@ -131,8 +132,11 @@ func usage() {
   jcloud up [<service> …]              what stands between each service and a
        [--root <dir>] [--env <path>]   deploy: the variables its manifest
        [--state <path>]                declares and the configuration lacks, and
-                                       whether a digest is pinned. Brings
-                                       nothing up.
+       [--published <path>]            whether a digest is pinned. With the
+                                       record scripts/published-digests.sh
+                                       gathers, it also says what that service's
+                                       CI published and prints the deploy's own
+                                       arguments. Brings nothing up.
   jcloud env <verb>                    the configuration in .env.age: list, get,
                                        set, unset, render — "jcloud env" alone
                                        prints the verbs and their flags
@@ -142,7 +146,7 @@ Every problem is reported at once: a manifest is written in one sitting, and a
 caller who fixes one field and runs again has been sent round a loop this could
 have answered the first time.
 
-init, adopt and up are specified in docs/JCLOUD.md and not implemented.
+init and adopt are specified in docs/JCLOUD.md and not implemented.
 `, Version)
 }
 
