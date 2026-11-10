@@ -67,3 +67,123 @@ Done when that model decodes and `agree` reports on the manifests it carries.
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on
+
+## Block E — Watching the server: jcloud reads the running machine on its own
+
+### §JCT23 The host, declared in jcloud.yml
+
+`survey` holds the server to what the manifests declare, and a manifest declares only
+services. The timers, directory modes and firewall that JC2 found broken on Japode are
+asserted in `survey-server.sh`, in bash, against a list written there by hand. Viglet
+Cloud has its own timers — the nightly backup, the crawl, `configure-realm` every 15
+minutes — and no way to say so.
+
+`jcloud.yml` gains a `host:` key: the timers that must be active, the paths whose mode
+is fixed, and whether a firewall must be enabled. A manifest whose backup is declared
+implies its own timer, so the common case is written once. `observe` reads exactly what
+`host:` names and `survey` compares it, with a finding per fact.
+
+Absent, nothing about the host is asserted: a platform opts in by declaring, never by
+inheriting Japode's list.
+
+### §JCT26 What changed since the last run
+
+Run twice, `survey` prints the same report whether the drift is a year old or an hour
+old. A watch run every few minutes then has two bad choices: alert on every run, or
+alert on nothing, because it cannot tell a new failure from one everyone already knows.
+
+`survey --since <previous observations>` compares the two runs as well as the tree, and
+splits the findings in three: new since the last run, still standing, and gone. The exit
+code stays the tree's verdict; the split is what a scheduler acts on.
+
+The previous file is passed, never stored: jcloud keeps no state, so where the last run
+lives is the caller's decision, like the transport.
+
+### §JCT27 Findings a scheduler can key on
+
+`survey` prints sentences for a reader. A scheduler that wants one alert per fact has to
+parse them, and the day a sentence is reworded the alert closes and a new one opens for
+a fact that never changed.
+
+`survey --json` prints each finding with a stable code (`container.missing`,
+`digest.moved`, `timer.failed`, `backup.stale`, `disk.low`, `cert.expiring`), the
+subject it is about, and with `--since` its state: new, standing or gone. The code and
+subject together are the alert's key, so rewording the prose touches nothing.
+
+The prose form stays the default and stays what a person reads in CI.
+
+### §JCT22 One collector, shipped with jcloud
+
+Today the observations come from Japode's `scripts/survey-server.sh`, a bash collector
+that knows Japode's timers, its `docker-lib.sh` and its container prefix. jcloud ships
+no collector, so a second platform adopting `survey` has to write its own, and every fix
+to one never reaches the other.
+
+`jcloud observe [--root <dir>]` runs on the host and prints the `<kind> <name> <value>`
+lines `survey` already reads: `container`, `running`, `pinned`, `profile`, and the host
+facts JCT23 makes declarable. It reads only the machine it runs on, through the `docker`
+and `systemctl` it finds on PATH, so JC29's division holds: jcloud still reaches no
+network, and the transport — SSH, a self-hosted runner, a local timer — stays the
+platform's, which is where the credential is.
+
+Japode's collector then shrinks to `ssh "$SURVEY_HOST" jcloud observe > obs`, and its
+`--repair` stays where JC96 put it. Refused: a jcloud that dials the host itself.
+
+### §JCT24 A backup that is recent, not a timer that exists
+
+An active timer is not a working backup. `systemctl is-active foo.timer` answers that
+the schedule exists; the unit it fires can fail every night and still read as active.
+JC2's finding was exactly this shape: 26 days of services serving with no copy of
+anything, and nothing that said so.
+
+`observe` reads, per declared timer, the last run's result and finish time (`systemctl
+show -p Result,ExecMainExitTimestamp`) and, where the manifest names a backup directory,
+the age of its newest file. The manifest or `host:` declares the oldest copy it accepts
+— `max_age: 26h` for a nightly job — and `survey` refuses one older, or a last run that
+failed.
+
+It reads timestamps and file ages only. It never opens a backup, so it says the copy is
+recent, not that it restores; that stays the restore test's job.
+
+### §JCT25 Disk and certificates, read on the host
+
+Two failures are seen today only through what they break: a full disk stops postgres and
+the builds, and an expired certificate takes every host on it down at once. Both are
+facts the host can answer locally, so they fit `observe` without a network reach.
+
+`observe` prints the free space of each filesystem `host:` names and the expiry of each
+certificate file the edge serves — the paths `jcloud.yml` gives, read with the local
+openssl, never by dialling the host name. `host:` declares the floors: `disk_free: 15%`,
+`cert_days: 14`, and `survey` reports one under its floor with how far under it is.
+
+Out of scope: CPU, memory and request latency. They change by the second and want a
+time-series store, which is a monitoring system and not a consistency check.
+
+### §JCT28 A watch that runs itself
+
+Every piece above is a command a person has to remember to run. Monitoring is the same
+commands run without anyone remembering, and a verdict that reaches someone.
+
+jcloud ships two templates under `contrib/`, read and copied by the platform, never run
+by jcloud: a systemd service and timer that run `observe`, then `survey --since --json`
+against the last run, and a workflow for a self-hosted runner that does the same and
+opens one GitHub issue per new finding, comments on a standing one only when it changes,
+and closes it when the finding is gone.
+
+jcloud still writes nothing and alerts nobody: the template does, with the platform's
+token, on the platform's machine — JC1's rule that a verdict is read where it is made.
+Refused: an alert channel inside jcloud, and any repair the timer runs on its own.
+
+### §JCT29 Viglet Cloud, watched without a collector of its own
+
+The proof that the watch is transparent is a platform adopting it without writing a
+collector. Viglet Cloud is that platform: nginx rather than Caddy, client silos
+instanced per key, and its own timers for backups, the crawl and `configure-realm`.
+
+Adoption is the files C190 already names (`jcloud.yml`, manifests for Turing, Shio,
+Dumont and the silos, a root `.env.example`), plus a `host:` key for its timers, disk
+and certificates, plus the JCT28 timer installed on the server. Nothing Viglet-specific
+is written in bash.
+
+Anything that adoption has to work around is filed here as its own line, the way JCT21
+was.

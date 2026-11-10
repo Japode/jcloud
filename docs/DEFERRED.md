@@ -10,3 +10,6 @@
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on
+
+## Block E — Watching the server: jcloud reads the running machine on its own
+
