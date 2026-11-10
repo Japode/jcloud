@@ -54,6 +54,12 @@ type Observed struct {
 	Timers    map[string]string    // unit without .timer -> systemctl is-active
 	Paths     map[string][2]string // declared path -> mode, user:group
 	Firewalls map[string]string    // firewall -> its status word
+
+	// A declared timer's last run (JCT24): how it ended, when it finished (unix
+	// seconds, "never" or "unknown"), and the host's clock an age is counted from.
+	LastRun  map[string]string
+	Finished map[string]string
+	Clock    map[string]int64
 }
 
 func ParseObserved(body string) *Observed {
@@ -65,6 +71,9 @@ func ParseObserved(body string) *Observed {
 		Timers:     map[string]string{},
 		Paths:      map[string][2]string{},
 		Firewalls:  map[string]string{},
+		LastRun:    map[string]string{},
+		Finished:   map[string]string{},
+		Clock:      map[string]int64{},
 	}
 	for _, line := range strings.Split(body, "\n") {
 		f := strings.Fields(line)
@@ -90,6 +99,15 @@ func ParseObserved(body string) *Observed {
 			o.Paths[f[1]] = [2]string{f[2], owner}
 		case "firewall":
 			o.Firewalls[f[1]] = f[2]
+		case "lastrun":
+			o.LastRun[f[1]] = f[2]
+		case "finished":
+			o.Finished[f[1]] = f[2]
+		case "clock":
+			var secs int64
+			if _, err := fmt.Sscan(f[2], &secs); err == nil {
+				o.Clock[f[1]] = secs
+			}
 		}
 	}
 	return o

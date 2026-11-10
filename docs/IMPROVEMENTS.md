@@ -103,22 +103,6 @@ subject together are the alert's key, so rewording the prose touches nothing.
 
 The prose form stays the default and stays what a person reads in CI.
 
-### §JCT24 A backup that is recent, not a timer that exists
-
-An active timer is not a working backup. `systemctl is-active foo.timer` answers that
-the schedule exists; the unit it fires can fail every night and still read as active.
-JC2's finding was exactly this shape: 26 days of services serving with no copy of
-anything, and nothing that said so.
-
-`observe` reads, per declared timer, the last run's result and finish time (`systemctl
-show -p Result,ExecMainExitTimestamp`) and, where the manifest names a backup directory,
-the age of its newest file. The manifest or `host:` declares the oldest copy it accepts
-— `max_age: 26h` for a nightly job — and `survey` refuses one older, or a last run that
-failed.
-
-It reads timestamps and file ages only. It never opens a backup, so it says the copy is
-recent, not that it restores; that stays the restore test's job.
-
 ### §JCT25 Disk and certificates, read on the host
 
 Two failures are seen today only through what they break: a full disk stops postgres and

@@ -9,7 +9,9 @@
 // So jcloud.yml may carry a `host:` key:
 //
 //	host:
-//	  timers: [japode-backup, japode-restore-test]   # each <unit>.timer must be active
+//	  timers:                                        # each <unit>.timer must be active
+//	    - japode-healthwatch                         # and its last run have succeeded
+//	    - {name: japode-backup, max_age: 7h}         # and finished within 7h (JCT24)
 //	  paths:
 //	    - path: .                                    # relative to the root, or absolute
 //	      mode: "750"
@@ -33,13 +35,56 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Host is what jcloud.yml says the machine must be. The zero value asserts nothing.
 type Host struct {
-	Timers   []string
+	Timers   []HostTimer
 	Paths    []HostPath
 	Firewall string // "" for none asserted, or the firewall that must be active
+}
+
+// HostTimer is one timer that must be active (JCT23), and whose unit's last run
+// must have succeeded (JCT24). An active timer is not a working job: the schedule
+// can exist while the unit it fires fails every night, which is the 26 days with
+// no copy that JC2 found. With max_age, the last run must also have finished
+// within it, so a job that stopped being fired at all is named too.
+//
+// Written as a bare name, or as {name, max_age} where max_age is a Go duration:
+//
+//	timers: [japode-healthwatch, {name: japode-backup, max_age: 7h}]
+//
+// It reads timestamps and nothing else. It never opens what the job wrote, so it
+// says a backup is recent, not that it restores; that stays the restore test's job.
+type HostTimer struct {
+	Name   string
+	MaxAge string // a Go duration as written, "" for none; validate refuses a bad one
+}
+
+func (t *HostTimer) UnmarshalYAML(n *yaml.Node) error {
+	if n.Kind == yaml.ScalarNode {
+		t.Name = n.Value
+		return nil
+	}
+	if n.Kind != yaml.MappingNode {
+		return fmt.Errorf("line %d: a timer is a name or {name, max_age}", n.Line)
+	}
+	for i := 0; i+1 < len(n.Content); i += 2 {
+		switch key, value := n.Content[i].Value, n.Content[i+1].Value; key {
+		case "name":
+			t.Name = value
+		case "max_age":
+			t.MaxAge = value
+		default:
+			// Refused for KnownFields' reason, which does not reach a node decoded
+			// by hand: a misspelt max_age would leave the age unasserted.
+			return fmt.Errorf("line %d: field %s not found in a timer", n.Content[i].Line, key)
+		}
+	}
+	return nil
 }
 
 type HostPath struct {
@@ -49,9 +94,9 @@ type HostPath struct {
 }
 
 type hostFile struct {
-	Timers   []string   `yaml:"timers"`
-	Paths    []HostPath `yaml:"paths"`
-	Firewall string     `yaml:"firewall"`
+	Timers   []HostTimer `yaml:"timers"`
+	Paths    []HostPath  `yaml:"paths"`
+	Firewall string      `yaml:"firewall"`
 }
 
 // firewalls is every firewall this build can read.
@@ -70,10 +115,13 @@ func (h Host) validate() []string {
 	bad := func(format string, args ...any) { out = append(out, fmt.Sprintf(format, args...)) }
 	for _, t := range h.Timers {
 		switch {
-		case !unitWord.MatchString(t):
-			bad("host.timers: %q is not a systemd unit name", t)
-		case strings.HasSuffix(t, ".timer"):
-			bad("host.timers: %q names the unit without .timer, which is added", t)
+		case !unitWord.MatchString(t.Name):
+			bad("host.timers: %q is not a systemd unit name", t.Name)
+		case strings.HasSuffix(t.Name, ".timer"):
+			bad("host.timers: %q names the unit without .timer, which is added", t.Name)
+		}
+		if d, err := time.ParseDuration(t.MaxAge); t.MaxAge != "" && (err != nil || d <= 0) {
+			bad("host.timers: %s has max_age %q, and an age is a positive duration such as 26h", t.Name, t.MaxAge)
 		}
 	}
 	for _, p := range h.Paths {
@@ -98,32 +146,22 @@ func (h Host) validate() []string {
 
 // observeHost reads what h names on the machine observe runs on, and nothing else.
 //
-//	timer    <unit>      <systemctl is-active>   unknown when systemd cannot be asked
+//	timer    <timer>     <systemctl is-active>   unknown when systemd cannot be asked
+//	lastrun  <timer>     <Result of its unit>    success, exit-code, … (JCT24)
+//	finished <timer>     <unix seconds>          never, or unknown (JCT24)
+//	clock    host        <unix seconds>          the host's now, which an age is from
 //	path     <path>      <mode> <user:group>     unknown unknown when stat failed
 //	firewall ufw         <status>                absent, or unreadable without root
 func observeHost(root string, h Host, run commandRunner) []string {
 	var lines []string
 	if len(h.Timers) > 0 {
-		var units []string
-		for _, t := range h.Timers {
-			units = append(units, t+".timer")
-		}
-		// is-active exits non-zero when any unit is not active, and still prints one
-		// state per unit, in order, which is the answer.
-		out, _ := run("systemctl", append([]string{"is-active"}, units...)...)
-		states := strings.Fields(out)
-		for i, t := range h.Timers {
-			state := "unknown"
-			if len(states) == len(units) {
-				state = states[i]
-			}
-			lines = append(lines, fmt.Sprintf("timer %s %s", t, state))
-		}
+		lines = append(lines, observeTimers(h.Timers, run)...)
 	}
 	for _, p := range h.Paths {
+		// Slashes, because stat runs on a Linux host whatever built this.
 		at := p.Path
 		if !path.IsAbs(at) {
-			at = filepath.Join(root, filepath.FromSlash(at))
+			at = path.Join(filepath.ToSlash(root), at)
 		}
 		mode, owner := "unknown", "unknown"
 		if out, err := run("stat", "-c", "%a %U:%G", at); err == nil {
@@ -151,19 +189,123 @@ func observeHost(root string, h Host, run commandRunner) []string {
 	return lines
 }
 
+// now is the host's clock, swapped by the tests.
+var now = time.Now
+
+// observeTimers asks systemd three things in three calls: whether each timer is
+// active, which unit each one fires (its Unit, usually <name>.service, read rather
+// than assumed), and how that unit's last run ended and when. A count that does
+// not match the units asked is an answer that cannot be lined up, and every
+// value it would have given reads unknown.
+func observeTimers(timers []HostTimer, run commandRunner) []string {
+	var lines []string
+	var units []string
+	for _, t := range timers {
+		units = append(units, t.Name+".timer")
+	}
+	// is-active exits non-zero when any unit is not active, and still prints one
+	// state per unit, in order, which is the answer.
+	out, _ := run("systemctl", append([]string{"is-active"}, units...)...)
+	states := strings.Fields(out)
+	out, _ = run("systemctl", append([]string{"show", "-p", "Unit", "--value"}, units...)...)
+	fired := strings.Fields(out)
+
+	results, finished := map[int]string{}, map[int]string{}
+	if len(fired) == len(units) {
+		out, _ = run("systemctl", append([]string{"show", "--timestamp=unix", "-p", "Result", "-p", "ExecMainExitTimestamp"}, fired...)...)
+		if blocks := strings.Split(strings.TrimSpace(strings.ReplaceAll(out, "\r", "")), "\n\n"); len(blocks) == len(units) {
+			for i, block := range blocks {
+				for _, line := range strings.Split(block, "\n") {
+					key, value, _ := strings.Cut(strings.TrimSpace(line), "=")
+					switch key {
+					case "Result":
+						results[i] = value
+					case "ExecMainExitTimestamp":
+						switch {
+						case value == "":
+							finished[i] = "never"
+						case strings.HasPrefix(value, "@"):
+							finished[i] = value[1:]
+						}
+					}
+				}
+			}
+		}
+	}
+
+	word := func(m map[int]string, i int) string {
+		if v := m[i]; v != "" {
+			return v
+		}
+		return "unknown"
+	}
+	for i, t := range timers {
+		state := "unknown"
+		if len(states) == len(units) {
+			state = states[i]
+		}
+		lines = append(lines,
+			fmt.Sprintf("timer %s %s", t.Name, state),
+			fmt.Sprintf("lastrun %s %s", t.Name, word(results, i)),
+			fmt.Sprintf("finished %s %s", t.Name, word(finished, i)))
+	}
+	return append(lines, fmt.Sprintf("clock host %d", now().Unix()))
+}
+
+// surveyTimer holds one timer to what jcloud.yml declares of it. An inactive timer
+// is the end of what can be said: its last run is a second complaint about one
+// fault, the way survey does not compare the digest of a container that is not up.
+func surveyTimer(t HostTimer, o *Observed) []Divergence {
+	unit := t.Name + ".timer"
+	one := func(says string) []Divergence { return []Divergence{{unit, says}} }
+	switch state, seen := o.Timers[t.Name]; {
+	case !seen:
+		return one("is declared in jcloud.yml host.timers and the observations do not report it")
+	case state == "unknown":
+		return one("could not be read — systemctl did not answer on the host")
+	case state != "active":
+		return one(fmt.Sprintf("is %s, not active, so the job it schedules never fires", state))
+	}
+
+	var out []Divergence
+	switch result, seen := o.LastRun[t.Name]; {
+	case !seen:
+		out = append(out, Divergence{unit, "is active and the observations do not say how its last run ended"})
+	case result == "unknown":
+		out = append(out, Divergence{unit, "is active and how its last run ended could not be read"})
+	case result != "success":
+		out = append(out, Divergence{unit, fmt.Sprintf("is active and its last run ended in %s — the schedule exists and the job fails", result)})
+	}
+
+	if t.MaxAge == "" {
+		return out
+	}
+	maxAge, _ := time.ParseDuration(t.MaxAge) // validate refused a bad one
+	clock := now()
+	if c, ok := o.Clock["host"]; ok {
+		clock = time.Unix(c, 0)
+	}
+	switch at, seen := o.Finished[t.Name]; {
+	case !seen || at == "unknown":
+		out = append(out, Divergence{unit, fmt.Sprintf("has a max_age of %s and when its last run finished could not be read", t.MaxAge)})
+	case at == "never":
+		out = append(out, Divergence{unit, fmt.Sprintf("has never finished a run, and jcloud.yml accepts none older than %s", t.MaxAge)})
+	default:
+		var secs int64
+		if _, err := fmt.Sscan(at, &secs); err != nil {
+			out = append(out, Divergence{unit, fmt.Sprintf("finished at %q, which is not a time", at)})
+		} else if age := clock.Sub(time.Unix(secs, 0)); age > maxAge {
+			out = append(out, Divergence{unit, fmt.Sprintf("last finished %s ago, older than the %s jcloud.yml accepts", age.Round(time.Minute), t.MaxAge)})
+		}
+	}
+	return out
+}
+
 // surveyHost holds what was observed to what h declares, one divergence per fact.
 func surveyHost(h Host, o *Observed) []Divergence {
 	var out []Divergence
 	for _, t := range h.Timers {
-		unit := t + ".timer"
-		switch state, seen := o.Timers[t]; {
-		case !seen:
-			out = append(out, Divergence{unit, "is declared in jcloud.yml host.timers and the observations do not report it"})
-		case state == "unknown":
-			out = append(out, Divergence{unit, "could not be read — systemctl did not answer on the host"})
-		case state != "active":
-			out = append(out, Divergence{unit, fmt.Sprintf("is %s, not active, so the job it schedules never fires", state)})
-		}
+		out = append(out, surveyTimer(t, o)...)
 	}
 	for _, p := range h.Paths {
 		got, seen := o.Paths[p.Path]

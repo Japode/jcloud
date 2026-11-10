@@ -58,7 +58,9 @@ backup: backup-conf                    # or none: no backup.conf compared, and
 builds: false                          # true: a manifest may say build: <Dockerfile>
 env_example: .env.example              # the template agree holds every key to
 host:                                  # absent: nothing about the host is asserted
-  timers: [japode-backup]              # each <unit>.timer must be active
+  timers:                              # each <unit>.timer must be active and
+    - japode-healthwatch               # its unit's last run must have succeeded
+    - {name: japode-backup, max_age: 7h}  # and finished within max_age
   paths:
     - path: .                          # relative to the root, or absolute
       mode: "750"

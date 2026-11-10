@@ -36,3 +36,4 @@
 
 - ✅ **JCT22** **Only Japode's survey-server.sh gathers observations, so another platform has no collector and must write its own** — jcloud observe runs on the host and prints the container, running, pinned and profile lines survey reads, so a platform needs no collector of its own (design recorded in `observe.go`).
 - ✅ **JCT23 (host: timers, modes, firewall)** **survey holds a server only to its services; the timers, modes and firewall it needs are asserted in hand-written bash** — jcloud.yml host: declares timers, modes and a firewall; observe reads them and survey reports each.
+- ✅ **JCT24** **survey cannot say a backup is stale: it reads that a timer is active, never whether its last run succeeded or when** — survey reports a declared timer whose last run failed, or finished longer ago than its max_age (design superseded: no manifest names a backup directory) (design recorded in `host.go`).
