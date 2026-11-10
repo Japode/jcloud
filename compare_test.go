@@ -114,6 +114,50 @@ func TestComparisonFindsEveryKindOfDrift(t *testing.T) {
 	}
 }
 
+// JCT16: two differences far apart — the port near the top, a variable appended at
+// the end — are reported as those two and nothing between them. Trimming only the
+// common head and tail printed every line from `port:` to the end, `health:`,
+// `volumes:` and `routes:` included.
+func TestTwoDistantDifferencesAreReportedAlone(t *testing.T) {
+	p := compareValid(t, func(s string) string {
+		s = strings.Replace(s, "port: 3000", "port: 3001", 1)
+		return strings.Replace(s, "    secret: true\nneeds:", "    secret: true\n  - name: MAX_UPLOAD\n    default: 10MB\nneeds:", 1)
+	})
+	if len(p) == 0 {
+		t.Fatal("two differences and the comparison said nothing")
+	}
+	var sawPort, sawUpload bool
+	for _, line := range p {
+		field, _, _ := strings.Cut(line, ":")
+		switch {
+		case field == "port":
+			sawPort = true
+		case strings.HasPrefix(field, "env["):
+			sawUpload = sawUpload || strings.Contains(line, "MAX_UPLOAD")
+		default:
+			t.Errorf("a line under %s differs in neither copy: %s", field, line)
+		}
+	}
+	if !sawPort || !sawUpload {
+		t.Fatalf("both differences should be named, got:\n  %s", strings.Join(p, "\n  "))
+	}
+	if !strings.Contains(strings.Join(p, "\n"), `port: ours.yml has "port: 3000"`) {
+		t.Errorf("each side's line is named by its field, got:\n  %s", strings.Join(p, "\n  "))
+	}
+}
+
+// The field a line sits under, as the report names it.
+func TestFieldsOfACanonicalRendering(t *testing.T) {
+	rendered := lines([]byte("version: 1\nhealth:\n    path: /x\n    test:\n        - CMD\nenv:\n    - name: A\n      secret: true\n    - name: B\n"))
+	want := []string{"version", "health", "health.path", "health.test", "health.test", "env", "env[0]", "env[0]", "env[1]"}
+	got := fieldsOf(rendered)
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d %q: got %q, want %q", i, rendered[i], got[i], want[i])
+		}
+	}
+}
+
 // Why the comparison is of canonical renderings and not of named fields: a field
 // added to the schema is compared without a line changing in compare.go. If this
 // fails, the comparison has grown a hand-written list of what it looks at, and the

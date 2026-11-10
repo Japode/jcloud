@@ -12,7 +12,6 @@
 
 ## Block D — What jcloud prints: a report a reader can act on
 
-- 📋 **JCT16** (deps: —) **compare reports every line between two distant differences, so a port and one new variable print some 60 lines** — compare is the check between the platform's copy and the service's own, and a report nobody can read is one whoever runs it stops reading. → §JCT16
 - 💭 **JCT17** (deps: —) **The README says ::error annotations are printed inside GitHub Actions, and jcloud prints them everywhere** — Local output repeats every problem twice, and a reader of the README expects a terminal to show each once. → §JCT17
 
 ## Done when — Block B
