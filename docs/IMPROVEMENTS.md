@@ -4,23 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT6 Backup agreement is the platform to declare
-
-agreeBackupConf reads `services/<name>/backup.conf` in the directive grammar of Japode's
-scripts/backup-lib.sh (`sqlite`, `mysql`, skip lines). That grammar is a fact about one
-platform's backup tool. The profile from JCT2 states the backup kind: `backup-conf`,
-today's behaviour and the default, or `none`, which skips the comparison and says so in
-the report instead of passing in silence.
-
-A third kind is not designed here. Viglet Cloud's backup-postgres.sh and
-backup-volumes.sh read volume names from the compose model, and whether a manifest's
-`sqlite:` volume maps onto them is a question to ask once that platform has manifests to
-ask it of.
-
-What holds under every kind: a volume declared `sqlite:`, or a need whose addon says
-`backup: mysql`, is a file with a live writer, and under `none` jcloud still warns that
-the platform claims no handling for it.
-
 ### §JCT7 Built images and tag pins
 
 The manifest refuses a tag or digest in `image:` because the deploy pins it into

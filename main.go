@@ -234,7 +234,7 @@ flags:
 		}
 		return run(args, nil, "states what it declares", "state what they declare")
 	}
-	return run(args, func(m *Manifest) []string { return m.AgreeWithRepo(root, repository, layout) },
+	return run(args, func(m *Manifest) ([]string, []string) { return m.AgreeWithRepo(root, repository, layout), nil },
 		"agrees with the repository it sits in", "agree with the repositories they sit in")
 }
 
@@ -255,7 +255,7 @@ func agree(paths []string, root, adaptedPath, composePath string) int {
 		}
 		*f.into = data
 	}
-	return run(paths, func(m *Manifest) []string { return m.AgreeFrom(root, in) },
+	return run(paths, func(m *Manifest) ([]string, []string) { return m.AgreeReport(root, in) },
 		"agrees with the files deployed beside it", "agree with the files deployed beside them")
 }
 
@@ -312,7 +312,10 @@ func compareManifests(oursPath, theirsPath string) int {
 // is only worth asking of a manifest that survived the first: a port that is not a
 // port disagrees with everything, and reporting that four times over is noise
 // standing where one answer belongs.
-func run(paths []string, compare func(*Manifest) []string, what, whatAll string) int {
+//
+// compare answers problems, which refuse the manifest, and notes, which are said
+// and refuse nothing: a comparison the platform's profile switched off (JCT6).
+func run(paths []string, compare func(*Manifest) ([]string, []string), what, whatAll string) int {
 	bad := 0
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -330,12 +333,22 @@ func run(paths []string, compare func(*Manifest) []string, what, whatAll string)
 		}
 
 		problems := m.Validate()
+		var notes []string
 		if len(problems) == 0 && compare != nil {
-			problems = compare(m)
+			problems, notes = compare(m)
+		}
+		// Under the verdict, whichever it is, and on stdout with the ✓: a note is
+		// not a failure, and a reader who sees only the errors loses nothing.
+		say := func() {
+			for _, note := range notes {
+				fmt.Printf("      \033[33m!\033[0m %s\n", note)
+				fmt.Printf("::warning file=%s::%s\n", path, note)
+			}
 		}
 		if len(problems) == 0 {
 			fmt.Printf("  \033[32m✓\033[0m %s: %s %s (%d volume(s), %d route(s), %d variable(s))\n",
 				path, m.Name, what, len(m.Volumes), len(m.Routes), len(m.Env))
+			say()
 			continue
 		}
 
@@ -349,6 +362,7 @@ func run(paths []string, compare func(*Manifest) []string, what, whatAll string)
 			// an ordinary line outside Actions.
 			fmt.Printf("::error file=%s::%s\n", path, problem)
 		}
+		say()
 		bad++
 	}
 

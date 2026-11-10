@@ -4,11 +4,10 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-- 📋 **JCT6** (deps: JCT2 ✅) **agree refuses a service without a Japode-format backup.conf, so a platform with its own backup scripts cannot pass** — Viglet Cloud backs up through backup-postgres.sh and backup-volumes.sh, and forcing restic directives on it would check a file nothing reads. → §JCT6
 - 📋 **JCT7** (deps: JCT2 ✅, JCT4 ✅) **up and survey read every image built on the server as unpinned, since a digest in images.env is the only pin they know** — Viglet Cloud still builds console, keycloak and the sites on the host and pulls its products by latest tag, and the report should name each case. → §JCT7
 - 📋 **JCT8** (deps: JCT2 ✅) **agree puts every variable under a service-name prefix, which a shared key like OPENAI_API_KEY can never carry** — Viglet Cloud reads several keys in many containers and prefixes others with VIGLET_, so the prefix has to be declared, not derived from the name. → §JCT8
 - 💭 **JCT9** (deps: JCT3 ✅, JCT4 ✅) **One product instanced per client silo needs one manifest per client, though only the host and the key differ** — Viglet Cloud renders per-client Turing, Shio and Dumont from clients.yaml, and a manifest per copy would be the drift jcloud exists to stop. → §JCT9
-- 📋 **JCT10** (deps: JCT3 ✅, JCT4 ✅, JCT5 ✅, JCT6, JCT7, JCT8) **Contract tests read only a Japode checkout, so nothing proves a second platform still agrees after a jcloud change** — Applying jcloud to Viglet Cloud is this block's acceptance test, and it has to run in jcloud CI rather than once by hand. → §JCT10
+- 📋 **JCT10** (deps: JCT3 ✅, JCT4 ✅, JCT5 ✅, JCT6 ✅, JCT7, JCT8) **Contract tests read only a Japode checkout, so nothing proves a second platform still agrees after a jcloud change** — Applying jcloud to Viglet Cloud is this block's acceptance test, and it has to run in jcloud CI rather than once by hand. → §JCT10
 - 📋 **JCT18** (deps: —) **A route gated by auth_request is reported forever, since no manifest field can state the gate** — Every Viglet Cloud per-client host runs auth_request to client-gate, so those routes cannot agree whatever their manifest says. → §JCT18
 - 📋 **JCT19** (deps: —) **Japode's check script passes no compose model, so its services still go through the substring compose check** — That check passes on a commented-out line, and keeping it beside the model leaves two rules for one fact. → §JCT19
 

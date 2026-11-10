@@ -49,6 +49,13 @@ type Profile struct {
 	PinFile         string // where the deploy writes those variables
 	Deploy          string // the command `up` prints, with {name} and {image}
 	Addon           string // where a need's provider sits, with {type}
+
+	// How the platform backs a service up (JCT6). "backup-conf" is Japode's: a
+	// backup.conf beside the manifest in scripts/backup-lib.sh's directive
+	// grammar, compared both ways. "none" is a platform whose backup tooling reads
+	// no per-service file: nothing is compared, the report says so, and a file
+	// with a live writer is named as one the platform claims no handling for.
+	Backup string
 }
 
 // DefaultProfile is the Japode platform's layout, and what a root with no
@@ -63,8 +70,12 @@ func DefaultProfile() *Profile {
 		PinFile:         ".deploy-state/images.env",
 		Deploy:          "DEPLOY_SERVICE={name} DEPLOY_IMAGE={image} bash scripts/deploy.sh {name}",
 		Addon:           "addons/{type}/addon.yml",
+		Backup:          "backup-conf",
 	}
 }
+
+// backupKinds is every way of backing up this build can compare against.
+var backupKinds = []string{"backup-conf", "none"}
 
 // profileFile is jcloud.yml as written. Pointers, because an empty container
 // prefix is a value a platform can mean (containers named by their short name
@@ -80,6 +91,7 @@ type profileFile struct {
 	PinFile         *string `yaml:"pin_file"`
 	Deploy          *string `yaml:"deploy"`
 	Addon           *string `yaml:"addon"`
+	Backup          *string `yaml:"backup"`
 }
 
 // routeKinds is every route grammar this build can read: Caddy through `caddy
@@ -129,6 +141,7 @@ func ParseProfile(data []byte) (*Profile, error) {
 	set(&p.PinFile, f.PinFile)
 	set(&p.Deploy, f.Deploy)
 	set(&p.Addon, f.Addon)
+	set(&p.Backup, f.Backup)
 
 	if problems := p.Validate(); len(problems) > 0 {
 		return nil, fmt.Errorf("%s: %s", ProfileFile, strings.Join(problems, "; "))
@@ -178,6 +191,9 @@ func (p *Profile) Validate() []string {
 	}
 	if !known {
 		bad("route.kind is %q, and this build reads %s", p.RouteKind, strings.Join(routeKinds, ", "))
+	}
+	if !contains(backupKinds, p.Backup) {
+		bad("backup is %q, and this build knows %s", p.Backup, strings.Join(backupKinds, ", "))
 	}
 	if !strings.Contains(p.ImageVar, "{NAME}") {
 		bad("image_var is %q and does not name {NAME}, so every service would pin one variable", p.ImageVar)

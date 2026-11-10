@@ -62,15 +62,22 @@ type AgreeInputs struct {
 
 // AgreeFrom is AgreeWith with every input the platform's script produced.
 func (m *Manifest) AgreeFrom(root string, in AgreeInputs) []string {
+	problems, _ := m.AgreeReport(root, in)
+	return problems
+}
+
+// AgreeReport is AgreeFrom with the notes too: what the report says without
+// refusing, such as a comparison the platform's profile switched off (JCT6).
+func (m *Manifest) AgreeReport(root string, in AgreeInputs) (problems, notes []string) {
 	prof, err := LoadProfile(root)
 	if err != nil {
-		return []string{err.Error()}
+		return []string{err.Error()}, nil
 	}
 	return m.AgreeIn(root, prof, in)
 }
 
-// AgreeIn is AgreeFrom with the platform's profile already read.
-func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) []string {
+// AgreeIn is AgreeReport with the platform's profile already read.
+func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string, []string) {
 	adaptedConfig := in.Routes
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
@@ -134,20 +141,49 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) []string 
 			p = append(p, m.agreeRouteJSON(routeRel, byHost)...)
 		}
 	}
-	// backup.conf is optional: a service with no volume needing special treatment
-	// declares none and has no file. Absent with nothing to say is agreement.
-	confRel := filepath.ToSlash(filepath.Join(svcDir, "backup.conf"))
-	conf, err := os.ReadFile(filepath.Join(root, svcDir, "backup.conf"))
-	switch {
-	case err == nil:
-		p = append(p, m.agreeBackupConf(confRel, string(conf), needs)...)
-	case m.wantsBackupConf(needs):
-		bad("%s: the manifest declares sqlite or exclude paths, or a need whose provider asks for a directive, and this file is not there", confRel)
+	var notes []string
+	if prof.Backup == "none" {
+		notes = m.unbackedNotes(needs)
+	} else {
+		// backup.conf is optional: a service with no volume needing special
+		// treatment declares none and has no file. Absent with nothing to say is
+		// agreement.
+		confRel := filepath.ToSlash(filepath.Join(svcDir, "backup.conf"))
+		conf, err := os.ReadFile(filepath.Join(root, svcDir, "backup.conf"))
+		switch {
+		case err == nil:
+			p = append(p, m.agreeBackupConf(confRel, string(conf), needs)...)
+		case m.wantsBackupConf(needs):
+			bad("%s: the manifest declares sqlite or exclude paths, or a need whose provider asks for a directive, and this file is not there", confRel)
+		}
 	}
 	if env, ok := read(".env.example"); ok {
 		p = append(p, m.agreeEnvExample(prof, ".env.example", env)...)
 	}
-	return p
+	return p, notes
+}
+
+// unbackedNotes is what `backup: none` still says (JCT6). The platform's backup
+// tooling reads no per-service file, so nothing is compared — and that is said
+// rather than passed in silence. What is true under every kind is that a sqlite
+// file, or a database a need's addon asks a directive for, has a live writer, and
+// a byte-for-byte copy of it may not restore. Each is named as a file the platform
+// claims no handling for. Notes and not problems: the platform may well handle it,
+// in a script jcloud cannot read.
+func (m *Manifest) unbackedNotes(needs []resolvedNeed) []string {
+	notes := []string{"backup not compared: jcloud.yml says backup: none, so no per-service file states how this service is backed up"}
+	for _, v := range m.Volumes {
+		for _, f := range v.SQLite {
+			notes = append(notes, fmt.Sprintf("volumes[%s] holds sqlite %s, a file with a live writer, and the platform claims no handling for it", v.Name, f))
+		}
+	}
+	for _, n := range needs {
+		if n.addon != nil && n.addon.Volume.Backup != "" {
+			notes = append(notes, fmt.Sprintf("needs[%s] is a %s database whose addon asks for `%s`, a live writer, and the platform claims no handling for it",
+				n.need.Name, n.need.Type, n.addon.Volume.Backup))
+		}
+	}
+	return notes
 }
 
 // From the first line matching re to the end, or the whole thing when nothing
