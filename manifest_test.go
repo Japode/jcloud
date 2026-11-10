@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -257,13 +256,10 @@ func TestTwoRoutesNeedLogNames(t *testing.T) {
 	}
 }
 
-// The manifests actually committed here have to pass. This is the test that would
-// have caught the schema and the repository disagreeing.
+// The manifests committed to the platform have to pass. This is the test that would
+// have caught the schema and the platform repository disagreeing.
 func TestCommittedManifests(t *testing.T) {
-	paths, err := filepath.Glob("../../services/*/japode.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
+	paths := platformGlob(t, "services/*/japode.yml")
 	if len(paths) == 0 {
 		t.Skip("no services/*/japode.yml in this tree")
 	}

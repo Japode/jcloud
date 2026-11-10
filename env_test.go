@@ -158,7 +158,7 @@ func mustRead(t *testing.T, path string) []byte {
 // The class is lifted from the script rather than written out again, which is the whole
 // point: a copy here would agree with a comment and not with what runs.
 func TestCheckEnvReadsTheKeysThisPackageWrites(t *testing.T) {
-	script, err := os.ReadFile(filepath.Join("..", "..", "scripts", "check-env.sh"))
+	script, err := os.ReadFile(filepath.Join(platformRoot(t), "scripts", "check-env.sh"))
 	if err != nil {
 		t.Fatalf("scripts/check-env.sh is the reader under test: %v", err)
 	}

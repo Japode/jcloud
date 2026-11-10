@@ -453,21 +453,19 @@ func TestBackupConfIsOptionalWhenNothingNeedsIt(t *testing.T) {
 	}
 }
 
-// The committed tree has to agree, which is the assertion CI actually runs.
-// scripts/check-jcloud.sh adapts the real Caddyfile before calling go test, so the
-// route half is checked there; run on its own, `go test` has no caddy and says so
-// rather than passing on a weaker check.
+// The platform's committed tree has to agree. The platform's scripts/check-jcloud.sh
+// adapts the real Caddyfile into .deploy-state/ first, so the route half is checked
+// there; without it `go test` has no caddy and says so rather than passing on a
+// weaker check.
 func TestCommittedManifestsAgree(t *testing.T) {
-	paths, err := filepath.Glob("../../services/*/japode.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
+	root := platformRoot(t)
+	paths := platformGlob(t, "services/*/japode.yml")
 	if len(paths) == 0 {
-		t.Skip("no services/*/japode.yml in this tree")
+		t.Skip("no services/*/japode.yml in " + root)
 	}
-	adapted, err := os.ReadFile("../../.deploy-state/caddy-adapt.json")
+	adapted, err := os.ReadFile(filepath.Join(root, ".deploy-state", "caddy-adapt.json"))
 	if err != nil {
-		t.Skip("no ../../.deploy-state/caddy-adapt.json — run scripts/check-jcloud.sh, which adapts it first")
+		t.Skip("no .deploy-state/caddy-adapt.json in " + root + " — its scripts/check-jcloud.sh adapts it first")
 	}
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -478,7 +476,7 @@ func TestCommittedManifestsAgree(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", path, err)
 		}
-		if p := m.AgreeWith("../..", adapted); len(p) != 0 {
+		if p := m.AgreeWith(root, adapted); len(p) != 0 {
 			t.Errorf("%s does not agree with the files beside it:\n  %s", path, strings.Join(p, "\n  "))
 		}
 	}

@@ -250,10 +250,7 @@ func TestNeedlessServiceIsUnaffected(t *testing.T) {
 // Nothing else asserts it: an addon is read by the service that names it, so one
 // nobody needs yet is a file with no check on it at all.
 func TestCommittedAddons(t *testing.T) {
-	paths, err := filepath.Glob("../../addons/*/addon.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
+	paths := platformGlob(t, "addons/*/addon.yml")
 	if len(paths) == 0 {
 		t.Skip("no addons/*/addon.yml in this tree")
 	}

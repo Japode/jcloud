@@ -269,7 +269,7 @@ func TestBehindComparesDigestsAndNotSpellings(t *testing.T) {
 // scripts/deploy.sh rather than restated here: this is the one place a rename over
 // there would otherwise print a command that runs and quietly deploys nothing new.
 func TestTheDeployCommandNamesTheVariablesTheDeployReads(t *testing.T) {
-	deploy, err := os.ReadFile(filepath.Join("..", "..", "scripts", "deploy.sh"))
+	deploy, err := os.ReadFile(filepath.Join(platformRoot(t), "scripts", "deploy.sh"))
 	if err != nil {
 		t.Fatalf("scripts/deploy.sh is what this command is for: %v", err)
 	}

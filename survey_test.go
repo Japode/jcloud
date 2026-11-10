@@ -103,9 +103,9 @@ func TestAnUnobservedDigestIsNotAMatch(t *testing.T) {
 // serving for weeks — as something nobody declared. The edge is the same shape from
 // the other side: it is in the top-level compose file and deliberately has no manifest.
 func TestAddonsAndTheEdgeAreDeclaredAndNotStrangers(t *testing.T) {
-	d, err := DeclaredIn("../..")
+	d, err := DeclaredIn(platformRoot(t))
 	if err != nil {
-		t.Fatalf("reading this repository: %v", err)
+		t.Fatalf("reading the platform repository: %v", err)
 	}
 	if !contains(d.Others, "caddy") {
 		t.Fatalf("the edge is not declared: %v", d.Others)
