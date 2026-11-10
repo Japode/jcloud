@@ -118,7 +118,7 @@ func digestOf(ref string) string {
 // (hostsKeys).
 func RequiredEnv(prof *Profile, m *Manifest) (required, fixed []string) {
 	for _, e := range m.Env {
-		key := m.SCREAM() + "_" + e.Name
+		key := m.EnvKey(e)
 		if e.Value != nil {
 			fixed = append(fixed, key)
 			continue

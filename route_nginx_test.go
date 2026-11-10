@@ -77,7 +77,7 @@ func TestNginxNeedsNoHostsKey(t *testing.T) {
 	if !reflect.DeepEqual(required, []string{"PASTE_SITE_URL"}) {
 		t.Errorf("required: got %v", required)
 	}
-	p := strings.Join(m.agreeEnvExample(prof, ".env.example", fixtureEnvExample), "\n")
+	p := strings.Join(m.agreeEnvExample(prof, nil, ".env.example", fixtureEnvExample), "\n")
 	if !strings.Contains(p, "PASTE_HOSTS= is not declared by the manifest") {
 		t.Errorf("a hosts key under nginx should read as an orphan, got:\n%s", p)
 	}

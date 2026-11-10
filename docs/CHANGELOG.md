@@ -12,6 +12,7 @@
 - ✅ **JCT5** **needs states only a sidecar database the service owns, never a postgres, redis or Keycloak several services share** — A need may say shared: <service>; agree holds that platform service to the addon and the client to waiting on and reaching it (design recorded in `addon.go`).
 - ✅ **JCT6** **agree refuses a service without a Japode-format backup.conf, so a platform with its own backup scripts cannot pass** — jcloud.yml may say backup: none; agree then compares no backup.conf, says so, and names each sqlite file or database the platform claims nothing for (design recorded in `agree.go`).
 - ✅ **JCT7** **up and survey read every image built on the server as unpinned, since a digest in images.env is the only pin they know** — build: names a host-built image, checked against the model and ready unpinned where builds: true; up names a tag pin and the digest to pin (design recorded in `up.go`).
+- ✅ **JCT8** **agree puts every variable under a service-name prefix, which a shared key like OPENAI_API_KEY can never carry** — env_prefix: names a service's key prefix and shared: true a bare key many services read, held to one default and secret; jcloud.yml names .env.example (design recorded in `agree.go`).
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

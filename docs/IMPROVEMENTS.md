@@ -4,21 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT8 Declared env prefix and shared keys
-
-The `.env.example` key for a manifest variable is `<SCREAM>_<NAME>` (agree.go), and
-orphanEnvKeys reports a key under that prefix the manifest does not declare. Viglet
-Cloud has keys several services read (OPENAI_API_KEY, the Keycloak client secrets) and
-per-product keys under `VIGLET_<PRODUCT>_`. The manifest gains `env_prefix:`, defaulting
-to today's derivation, and a variable may say `shared: true`: its `.env.example` key is
-the bare name, other manifests may declare it too, and agree checks that every manifest
-declaring a shared key agrees on its default and on `secret`.
-
-`jcloud env` already takes `--file`, so `.env.age` works on any tree. Viglet Cloud has
-no `.env.example` beside its compose file, only console/.env.example, and keeps a
-tracked docker/.env with live secrets. The profile names where the example lives;
-adopting jcloud there starts by writing one and moving docker/.env into `.env.age`.
-
 ### §JCT9 Manifests instanced by a registry
 
 Viglet Cloud's scripts/gen-clients renders docker-compose.clients.yml, an nginx fragment

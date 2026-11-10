@@ -52,7 +52,13 @@ addon: addons/{type}/addon.yml
 backup: backup-conf                    # or none: no backup.conf compared, and
                                        # each sqlite file or database named
 builds: false                          # true: a manifest may say build: <Dockerfile>
+env_example: .env.example              # the template agree holds every key to
 ```
+
+A manifest names its own keys' prefix with `env_prefix: VIGLET_TURING_` (the default is
+its name, upper case, `-` as `_`). A variable with `shared: true` is set by its bare
+name, such as `OPENAI_API_KEY`, and every manifest declaring it has to agree on its
+default and on `secret`.
 
 jcloud refuses a misspelt key or a path outside the root rather than falling back to the
 default. It reads this file and never generates one.

@@ -196,8 +196,8 @@ func (m *Manifest) agreeComposeModel(model *composeModel, needs []resolvedNeed, 
 			if got == nil || *got != *e.Value {
 				bad("%s: %s is not the fixed value %q the manifest declares", at, e.Name, *e.Value)
 			}
-		case got == nil || !strings.Contains(*got, "${"+m.SCREAM()+"_"+e.Name):
-			bad("%s: %s does not read ${%s_%s}, so .env cannot set it", at, e.Name, m.SCREAM(), e.Name)
+		case got == nil || !strings.Contains(*got, "${"+m.EnvKey(e)):
+			bad("%s: %s does not read ${%s}, so .env cannot set it", at, e.Name, m.EnvKey(e))
 		}
 	}
 

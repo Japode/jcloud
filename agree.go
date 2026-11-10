@@ -162,9 +162,11 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 			bad("%s: the manifest declares sqlite or exclude paths, or a need whose provider asks for a directive, and this file is not there", confRel)
 		}
 	}
-	if env, ok := read(".env.example"); ok {
-		p = append(p, m.agreeEnvExample(prof, ".env.example", env)...)
+	others := m.siblings(root, prof)
+	if env, ok := read(prof.EnvExample); ok {
+		p = append(p, m.agreeEnvExample(prof, others, filepath.ToSlash(prof.EnvExample), env)...)
 	}
+	p = append(p, m.agreeShared(others)...)
 	return p, notes
 }
 
@@ -222,6 +224,28 @@ func (m *Manifest) SCREAM() string {
 	return strings.ToUpper(strings.ReplaceAll(m.Name, "-", "_"))
 }
 
+// EnvPrefix is what this service's configuration keys start with: `env_prefix:`
+// when the manifest declares one (JCT8), and SCREAM plus `_` when it does not. A
+// platform that spells its keys `VIGLET_TURING_*` declares the prefix rather than
+// renaming the service to fit a derivation.
+func (m *Manifest) EnvPrefix() string {
+	if m.EnvPrefixDecl != "" {
+		return m.EnvPrefixDecl
+	}
+	return m.SCREAM() + "_"
+}
+
+// EnvKey is the configuration key a variable is set by: the prefix and its name,
+// or its bare name when it is shared — one key several services read, such as
+// OPENAI_API_KEY (JCT8). Every check that names a key asks this, so the rule is
+// written once.
+func (m *Manifest) EnvKey(e EnvVar) string {
+	if e.Shared {
+		return e.Name
+	}
+	return m.EnvPrefix() + e.Name
+}
+
 // The variable an address block reads its hosts from. The log field is what
 // separates two routes on one service, so a manifest with one route spells it
 // `<SVC>_HOSTS` and a second route called `content` spells it
@@ -232,9 +256,9 @@ func (m *Manifest) SCREAM() string {
 // one rule is the drift the whole comparison exists to end.
 func (m *Manifest) hostsVar(r Route) string {
 	if r.Log == "" || r.Log == "access" {
-		return m.SCREAM() + "_HOSTS"
+		return m.EnvPrefix() + "HOSTS"
 	}
-	return m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
+	return m.EnvPrefix() + strings.ToUpper(r.Log) + "_HOSTS"
 }
 
 // hostsKeys is every hosts variable the configuration has to carry. Only a Caddy
@@ -323,8 +347,8 @@ func (m *Manifest) agreeCompose(at, body string, prof *Profile) []string {
 				bad("%s: %s is not the fixed value %q the manifest declares", at, e.Name, *e.Value)
 			}
 		default:
-			if !strings.Contains(body, "${"+m.SCREAM()+"_"+e.Name) {
-				bad("%s: %s does not read ${%s_%s}, so .env cannot set it", at, e.Name, m.SCREAM(), e.Name)
+			if key := m.EnvKey(e); !strings.Contains(body, "${"+key) {
+				bad("%s: %s does not read ${%s}, so .env cannot set it", at, e.Name, key)
 			}
 		}
 	}
@@ -450,7 +474,7 @@ func (m *Manifest) declares(kind, key, path string) bool {
 	return false
 }
 
-func (m *Manifest) agreeEnvExample(prof *Profile, at, body string) []string {
+func (m *Manifest) agreeEnvExample(prof *Profile, others []*Manifest, at, body string) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -459,7 +483,7 @@ func (m *Manifest) agreeEnvExample(prof *Profile, at, body string) []string {
 	}
 
 	for _, e := range m.Env {
-		key := m.SCREAM() + "_" + e.Name
+		key := m.EnvKey(e)
 		switch {
 		case e.Value != nil:
 			// A fixed value is not configuration. Its presence here would invite
@@ -478,8 +502,65 @@ func (m *Manifest) agreeEnvExample(prof *Profile, at, body string) []string {
 		}
 	}
 
-	p = append(p, m.orphanEnvKeys(prof, at, body)...)
+	p = append(p, m.orphanEnvKeys(prof, others, at, body)...)
 	return p
+}
+
+// agreeShared holds every manifest declaring a shared key to one statement of it
+// (JCT8). A shared key is one line in .env.example and one value in the secret,
+// so two manifests disagreeing on its default or on whether it is secret are two
+// answers about one fact, and whichever the template shows is the other one wrong.
+func (m *Manifest) agreeShared(others []*Manifest) []string {
+	var p []string
+	for _, e := range m.Env {
+		if !e.Shared {
+			continue
+		}
+		for _, o := range others {
+			for _, f := range o.Env {
+				if !f.Shared || f.Name != e.Name {
+					continue
+				}
+				if deref(e.Default) != deref(f.Default) || (e.Default == nil) != (f.Default == nil) {
+					p = append(p, fmt.Sprintf("env[%s]: shared, and its default is %q here and %q in %s", e.Name, deref(e.Default), deref(f.Default), o.Name))
+				}
+				if e.Secret != f.Secret {
+					p = append(p, fmt.Sprintf("env[%s]: shared, and secret is %t here and %t in %s", e.Name, e.Secret, f.Secret, o.Name))
+				}
+			}
+		}
+	}
+	return p
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// siblings is every other manifest the platform declares, parsed. One that will
+// not parse is passed over: it is `check`'s to report, under its own name.
+func (m *Manifest) siblings(root string, prof *Profile) []*Manifest {
+	names, err := prof.Services(root)
+	if err != nil {
+		return nil
+	}
+	var out []*Manifest
+	for _, name := range names {
+		if name == m.Name {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(root, prof.ManifestPath(name)))
+		if err != nil {
+			continue
+		}
+		if o, err := Parse(data); err == nil {
+			out = append(out, o)
+		}
+	}
+	return out
 }
 
 // The other direction, which backup.conf has had all along and this did not: a key
@@ -492,27 +573,38 @@ func (m *Manifest) agreeEnvExample(prof *Profile, at, body string) []string {
 //
 // Scoped to this service's own prefix. A manifest knows what it declares and
 // nothing about what any other service or the edge does, so `ACME_EMAIL` and
-// `BACKUP_*` are not its business. Two services cannot collide here either: the
-// prefix ends in `_`, so `SKILL_` is not a prefix of `SKILLGIST_HOSTS`.
-func (m *Manifest) orphanEnvKeys(prof *Profile, at, body string) []string {
+// `BACKUP_*` are not its business. The prefix ends in `_`, so `SKILL_` is not a
+// prefix of `SKILLGIST_HOSTS`. But one prefix can hold another — `SKILL_` holds
+// `SKILL_GIST_`, and a declared `VIGLET_TURING_` holds `VIGLET_TURING_DEMO_`
+// (JCT8) — so a key under a longer prefix another manifest owns is that
+// manifest's, and not an orphan here.
+func (m *Manifest) orphanEnvKeys(prof *Profile, others []*Manifest, at, body string) []string {
 	var p []string
 
-	prefix := m.SCREAM() + "_"
+	prefix := m.EnvPrefix()
 	// Every key the manifest accounts for, including the fixed ones. A fixed value
 	// has no business being here and the check above already says so by name —
 	// listing it as unaccounted for would report one mistake twice.
 	known := map[string]bool{}
 	for _, e := range m.Env {
-		known[prefix+e.Name] = true
+		known[m.EnvKey(e)] = true
 	}
 	for _, k := range m.hostsKeys(prof) {
 		known[k] = true
+	}
+	theirs := func(key string) bool {
+		for _, o := range others {
+			if op := o.EnvPrefix(); len(op) > len(prefix) && strings.HasPrefix(key, op) {
+				return true
+			}
+		}
+		return false
 	}
 
 	key := regexp.MustCompile(`^([A-Z][A-Z0-9_]*)=`)
 	for _, line := range strings.Split(body, "\n") {
 		match := key.FindStringSubmatch(line)
-		if match == nil || !strings.HasPrefix(match[1], prefix) || known[match[1]] {
+		if match == nil || !strings.HasPrefix(match[1], prefix) || known[match[1]] || theirs(match[1]) {
 			continue
 		}
 		p = append(p, fmt.Sprintf("%s: %s= is not declared by the manifest — a key nobody reads is an invitation to set it", at, match[1]))

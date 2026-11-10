@@ -58,6 +58,11 @@ type Manifest struct {
 	// the first holds the compose file to it, the second does not report a service
 	// missing whose profile was never switched on.
 	Profile string `yaml:"profile"`
+
+	// What this service's configuration keys start with, `_` included (JCT8).
+	// Absent, it is the short name upper-cased with `-` as `_`, which is what the
+	// Japode platform's keys have always been. EnvPrefix answers either.
+	EnvPrefixDecl string `yaml:"env_prefix"`
 }
 
 type Health struct {
@@ -120,6 +125,10 @@ type EnvVar struct {
 	Value   *string `yaml:"value"`
 	Secret  bool    `yaml:"secret"`
 	Doc     string  `yaml:"doc"`
+	// One key several services read, such as OPENAI_API_KEY (JCT8): its key is
+	// the bare name with no prefix, other manifests may declare it too, and agree
+	// holds all of them to one default and one secret.
+	Shared bool `yaml:"shared"`
 }
 
 // Need is one dependency beside the service. The name is this service's word for
@@ -420,10 +429,15 @@ func (m *Manifest) validateNeeds() []string {
 	if m.Profile != "" && !profileRE.MatchString(m.Profile) {
 		bad("profile: %q is not a compose profile name", m.Profile)
 	}
+	if m.EnvPrefixDecl != "" && !envPrefixRE.MatchString(m.EnvPrefixDecl) {
+		bad("env_prefix: %q is not a variable prefix: upper case, digits and _, ending in _ so that it is a whole word of every key", m.EnvPrefixDecl)
+	}
 	return p
 }
 
 var profileRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
+
+var envPrefixRE = regexp.MustCompile(`^[A-Z][A-Z0-9_]*_$`)
 
 func (m *Manifest) validateEnv() []string {
 	var p []string

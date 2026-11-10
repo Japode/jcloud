@@ -63,6 +63,11 @@ type Profile struct {
 	// checked against the compose model's build and reported as built, not as
 	// unpinned.
 	Builds bool
+
+	// Where the configuration template sits, relative to the root (JCT8). It is
+	// what a person reads when writing the secret, so agree holds it to every
+	// key the manifests declare.
+	EnvExample string
 }
 
 // DefaultProfile is the Japode platform's layout, and what a root with no
@@ -78,6 +83,7 @@ func DefaultProfile() *Profile {
 		Deploy:          "DEPLOY_SERVICE={name} DEPLOY_IMAGE={image} bash scripts/deploy.sh {name}",
 		Addon:           "addons/{type}/addon.yml",
 		Backup:          "backup-conf",
+		EnvExample:      ".env.example",
 	}
 }
 
@@ -100,6 +106,7 @@ type profileFile struct {
 	Addon           *string `yaml:"addon"`
 	Backup          *string `yaml:"backup"`
 	Builds          *bool   `yaml:"builds"`
+	EnvExample      *string `yaml:"env_example"`
 }
 
 // routeKinds is every route grammar this build can read: Caddy through `caddy
@@ -150,6 +157,7 @@ func ParseProfile(data []byte) (*Profile, error) {
 	set(&p.Deploy, f.Deploy)
 	set(&p.Addon, f.Addon)
 	set(&p.Backup, f.Backup)
+	set(&p.EnvExample, f.EnvExample)
 	if f.Builds != nil {
 		p.Builds = *f.Builds
 	}
@@ -210,6 +218,7 @@ func (p *Profile) Validate() []string {
 		bad("image_var is %q and does not name {NAME}, so every service would pin one variable", p.ImageVar)
 	}
 	relative("pin_file", p.PinFile)
+	relative("env_example", p.EnvExample)
 	if strings.TrimSpace(p.Deploy) == "" {
 		bad("deploy is empty")
 	}
