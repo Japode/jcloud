@@ -96,21 +96,6 @@ Once this lands, Japode's `survey-server.sh` can shrink to `ssh … jcloud obser
 its timers, mode and firewall moved into its `jcloud.yml`. That switch is filed in the
 cloud repo, not here.
 
-### §JCT28 A watch that runs itself
-
-Every piece above is a command a person has to remember to run. Monitoring is the same
-commands run without anyone remembering, and a verdict that reaches someone.
-
-jcloud ships two templates under `contrib/`, read and copied by the platform, never run
-by jcloud: a systemd service and timer that run `observe`, then `survey --since --json`
-against the last run, and a workflow for a self-hosted runner that does the same and
-opens one GitHub issue per new finding, comments on a standing one only when it changes,
-and closes it when the finding is gone.
-
-jcloud still writes nothing and alerts nobody: the template does, with the platform's
-token, on the platform's machine — JC1's rule that a verdict is read where it is made.
-Refused: an alert channel inside jcloud, and any repair the timer runs on its own.
-
 ### §JCT29 Viglet Cloud, watched without a collector of its own
 
 The proof that the watch is transparent is a platform adopting it without writing a

@@ -1,0 +1,12 @@
+# Runs jcloud-watch.service every 15 minutes (JCT28). Persistent= runs a missed one
+# at boot; the delay keeps it off the minute every other timer fires on.
+[Unit]
+Description=jcloud watch, every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+RandomizedDelaySec=60
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -103,6 +103,21 @@ value is a strip. Open-source nginx has no active health check, so `health_uri` 
 compared. A route's `auth_request` (or Caddy's `forward_auth`) is compared with the
 manifest route's `gate:`, the URI of that subrequest, in both directions.
 
+## Watching a server
+
+`contrib/` holds two templates a platform copies, which jcloud never runs. Both observe
+the host, run `survey --since` against the previous run kept on that machine, and write
+`report.json`:
+
+- `contrib/systemd/`: a script, service and timer that run every 15 minutes. The unit
+  fails when the server diverges, so it shows in `systemctl --failed`, and the platform
+  can add an `OnFailure=`.
+- `contrib/github/jcloud-watch.yml`: a workflow for a self-hosted runner on the server.
+  It keeps one GitHub issue per finding, keyed by code and subject. A new finding opens
+  an issue, a change in wording updates it, and a finding that is gone closes it.
+
+jcloud itself keeps no state, sends no alert and repairs nothing.
+
 ## Installing it
 
 Each `v*` tag is a release. Pick one of three ways to run it:

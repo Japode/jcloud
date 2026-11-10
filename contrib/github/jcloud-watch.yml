@@ -1,0 +1,94 @@
+# jcloud watch on a self-hosted runner (JCT28). A template: copy it into the platform
+# repository's .github/workflows/ and set the two paths below. The runner must be on
+# the server, because `jcloud observe` reads the machine it runs on and nothing else.
+#
+# Each run observes, surveys against the last run kept on the runner, and keeps one
+# GitHub issue per finding, keyed by its code and subject (never its wording): a new
+# finding opens one, a standing one is updated only when what it says changes, and one
+# that is gone is closed. The token is the workflow's own, on the platform's machine;
+# jcloud writes nothing and alerts nobody.
+#
+# The run stays green when the server diverges, because the issues are the alert and a
+# red run every half hour is noise. It goes red when the watch itself cannot run.
+name: jcloud watch
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+concurrency:
+  group: jcloud-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    runs-on: [self-hosted]
+    env:
+      JCLOUD_ROOT: /opt/platform
+      JCLOUD_STATE: /var/lib/jcloud-watch
+    steps:
+      - name: Observe and survey
+        run: |
+          set -euo pipefail
+          mkdir -p "$JCLOUD_STATE"
+          jcloud observe --root "$JCLOUD_ROOT" >"$JCLOUD_STATE/observed.new"
+          since=()
+          [ ! -s "$JCLOUD_STATE/observed.last" ] || since=(--since "$JCLOUD_STATE/observed.last")
+          jcloud survey --root "$JCLOUD_ROOT" ${since[@]+"${since[@]}"} "$JCLOUD_STATE/observed.new" || true
+          verdict=0
+          jcloud survey --root "$JCLOUD_ROOT" ${since[@]+"${since[@]}"} --json "$JCLOUD_STATE/observed.new" \
+            >"$JCLOUD_STATE/report.json" || verdict=$?
+          [ "$verdict" -le 1 ] || exit "$verdict"
+          mv "$JCLOUD_STATE/observed.new" "$JCLOUD_STATE/observed.last"
+
+      - name: One issue per finding
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = JSON.parse(fs.readFileSync(`${process.env.JCLOUD_STATE}/report.json`, 'utf8'));
+            const label = 'jcloud-watch';
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            // The key and the last wording live in the issue body, so nothing else
+            // has to be stored: code plus subject is the finding, says is its text.
+            const marker = (key, says) =>
+              `<!-- jcloud-watch: ${key} -->\n<!-- says: ${says.replace(/--/g, '- -')} -->`;
+            const read = (body) => ({
+              key: (body || '').match(/^<!-- jcloud-watch: (.+?) -->$/m)?.[1],
+              says: (body || '').match(/^<!-- says: (.*?) -->$/m)?.[1],
+            });
+
+            const open = new Map();
+            const issues = await github.paginate(github.rest.issues.listForRepo,
+              { ...repo, state: 'open', labels: label, per_page: 100 });
+            for (const issue of issues) {
+              const { key } = read(issue.body);
+              if (key) open.set(key, issue);
+            }
+
+            const current = new Set();
+            for (const f of report.findings) {
+              if (f.state === 'gone') continue;
+              const key = `${f.code} ${f.subject}`;
+              current.add(key);
+              const issue = open.get(key);
+              const body = `${marker(key, f.says)}\n\n**${f.subject}** ${f.says}\n\n\`${f.code}\`, found by jcloud survey.`;
+              if (!issue) {
+                await github.rest.issues.create({ ...repo, title: `${f.subject}: ${f.code}`, body, labels: [label] });
+              } else if (read(issue.body).says !== f.says.replace(/--/g, '- -')) {
+                await github.rest.issues.update({ ...repo, issue_number: issue.number, body });
+                await github.rest.issues.createComment({ ...repo, issue_number: issue.number, body: `Now: ${f.says}` });
+              }
+            }
+
+            // Closed when it is no longer found, which also closes one whose gone
+            // run was missed.
+            for (const [key, issue] of open) {
+              if (current.has(key)) continue;
+              await github.rest.issues.createComment({ ...repo, issue_number: issue.number, body: 'jcloud survey no longer finds this.' });
+              await github.rest.issues.update({ ...repo, issue_number: issue.number, state: 'closed', state_reason: 'completed' });
+            }

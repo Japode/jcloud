@@ -13,8 +13,7 @@
 ## Block E — Watching the server: jcloud reads the running machine on its own
 
 - ⏳ **JCT23** (deps: cloud C190) **survey holds a server only to its services; the timers, modes and firewall it needs are asserted in hand-written bash** — a manifest's declared backup implying its own timer, once a manifest can say it runs one. → §JCT23
-- 📋 **JCT28** (deps: JCT22 ✅, JCT26 ✅, JCT27 ✅) **Nothing runs survey on a schedule, so drift and failed jobs are found only when somebody thinks to look** — jcloud ships a timer and a self-hosted workflow template that observe, compare with the last run and keep one issue per finding. → §JCT28
-- 📋 **JCT29** (deps: JCT21 ✅, JCT24 ✅, JCT25 ✅, JCT28, cloud C190) **Viglet Cloud's server is watched by nothing that reads it against what its own tree declares** — Adopting it with only jcloud.yml and manifests, no Viglet bash, is the proof the watch is transparent to a platform. → §JCT29
+- 📋 **JCT29** (deps: JCT21 ✅, JCT24 ✅, JCT25 ✅, JCT28 ✅, cloud C190) **Viglet Cloud's server is watched by nothing that reads it against what its own tree declares** — Adopting it with only jcloud.yml and manifests, no Viglet bash, is the proof the watch is transparent to a platform. → §JCT29
 
 ## Done when — Block B
 
@@ -46,3 +45,8 @@
   timer when inactive.
 
 ## Non-goals
+
+- **An alert channel inside jcloud** The watch templates alert with the platform's token
+  on the platform's machine; jcloud reports and sends nothing (JC1, JCT28).
+- **A repair the watch runs on its own** A repair that writes to the server has to argue
+  why it is not a deploy (JC96); a timer firing it unattended would skip that argument.

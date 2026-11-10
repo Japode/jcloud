@@ -1,0 +1,17 @@
+# jcloud watch (JCT28): the server against what its tree declares. A template: copy it
+# to /etc/systemd/system/ with jcloud-watch.timer, set the two paths, then
+#   systemctl daemon-reload && systemctl enable --now jcloud-watch.timer
+#
+# It reads docker, systemd and the files jcloud.yml names, and writes only under
+# JCLOUD_STATE. `ufw status` and a root-owned certificate need root; run it as a user
+# in the docker group instead and those facts read as unread, which survey reports.
+[Unit]
+Description=jcloud watch: the server against what its tree declares
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=JCLOUD_ROOT=/opt/platform
+Environment=JCLOUD_STATE=/var/lib/jcloud-watch
+ExecStart=/usr/local/lib/jcloud/jcloud-watch.sh
+# OnFailure= is where the platform sends a red run further, if it wants one.
