@@ -107,8 +107,10 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 	// file's text otherwise (compose_model.go says why the first is the one to
 	// want, JCT4).
 	svcDir := prof.ServiceDir(m.Name)
+	var model *composeModel
 	if len(in.Compose) > 0 {
-		if model, err := parseComposeModel(in.Compose); err != nil {
+		var err error
+		if model, err = parseComposeModel(in.Compose); err != nil {
 			bad("compose: %v", err)
 		} else {
 			p = append(p, m.agreeComposeModel(model, needs, prof)...)
@@ -132,6 +134,7 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 	if prof.RouteKind == "nginx" {
 		parse, produce = parseNginxRoutes, "the platform's script runs `nginx -T` and passes it with --routes"
 	}
+	var byHost map[string]*proxy
 	switch {
 	// len and not nil: an empty file is as much "nobody adapted this" as a nil
 	// slice is, and handing "" to the parser reports a malformed config for what
@@ -139,16 +142,28 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 	case len(adaptedConfig) == 0:
 		bad("%s: the %s configuration was not supplied, so what this route means is unchecked — %s", routeRel, prof.RouteKind, produce)
 	default:
-		byHost, err := parse(adaptedConfig)
-		if err != nil {
+		var err error
+		if byHost, err = parse(adaptedConfig); err != nil {
 			bad("%s: %v", routeRel, err)
+			byHost = nil
 		} else {
 			p = append(p, m.agreeRouteJSON(routeRel, byHost)...)
 		}
 	}
+	others := m.siblings(root, prof)
 	var notes []string
+	// The copies a platform renders per client (JCT9) are in the model and only
+	// there; without it they are said to be unchecked, not passed over.
+	switch {
+	case m.Instances == nil:
+	case model == nil:
+		notes = append(notes, fmt.Sprintf("instances: %s copies are found in the compose model, and --compose was not given, so none was checked", m.Instances.Service))
+	default:
+		ip, inotes := m.agreeInstances(model, byHost, needs, prof, others)
+		p, notes = append(p, ip...), append(notes, inotes...)
+	}
 	if prof.Backup == "none" {
-		notes = m.unbackedNotes(needs)
+		notes = append(notes, m.unbackedNotes(needs)...)
 	} else {
 		// backup.conf is optional: a service with no volume needing special
 		// treatment declares none and has no file. Absent with nothing to say is
@@ -162,7 +177,6 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 			bad("%s: the manifest declares sqlite or exclude paths, or a need whose provider asks for a directive, and this file is not there", confRel)
 		}
 	}
-	others := m.siblings(root, prof)
 	if env, ok := read(prof.EnvExample); ok {
 		p = append(p, m.agreeEnvExample(prof, others, filepath.ToSlash(prof.EnvExample), env)...)
 	}

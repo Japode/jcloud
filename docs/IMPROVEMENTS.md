@@ -4,23 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT9 Manifests instanced by a registry
-
-Viglet Cloud's scripts/gen-clients renders docker-compose.clients.yml, an nginx fragment
-and a Keycloak import from docker/clients.yaml: per client key, an app container for
-each product the client has, with its own redis and its own host. That is a renderer,
-which the Japode platform refused (JC34) and Viglet Cloud chose, and `gen-clients
---check` already gates its drift in CI.
-
-The open question is what a manifest is for such a service. Two shapes. A manifest with
-placeholders (`{client}` in name, host and env prefix) plus the registry as input, so
-agree checks each instance against the generated files. Or jcloud leaves generated files
-to their generator's own check and validates only the product's template manifest. The
-second is cheaper and may be enough.
-
-Decide after JCT3 and JCT4 exist, against the real generated files rather than in the
-abstract.
-
 ### §JCT10 A second platform in the contract tests
 
 The TestCommitted tests read the tree JCLOUD_PLATFORM names and assert facts about
@@ -71,6 +54,29 @@ one code path.
 
 The two repositories land in order: the platform script first, then the jcloud release
 that drops the fallback, or the platform's CI turns red on a model it never built.
+
+### §JCT20 How a container is reached and probed
+
+Two of agree's compose assertions encode how the Japode platform reaches a container,
+and Viglet Cloud reaches its own another way. Both were read off its generated
+docker/docker-compose.clients.yml while building JCT9.
+
+The port. agreeComposeModel (and agreeInstances, and the textual agreeCompose) require
+the manifest's port in `expose:` or a published port. Viglet services join the `viglet`
+network and declare neither, because expose is documentation there and nginx dials the
+container name. The port is still stated twice: in the healthcheck and in the edge's
+upstream. So the evidence should be any of the three (expose, a published target, the
+healthcheck naming it), and the route check already holds the upstream to it.
+
+The probe. Turing's healthcheck is `bash -c '</dev/tcp/localhost/2700'`: a TCP connect,
+no HTTP path. The manifest requires health.path, and agree requires the healthcheck to
+mention it. A `probe: tcp` with no path is the honest statement: agree then asserts only
+that the healthcheck names the port, and the edge, which has no active check under nginx
+(JCT3), needs no path either. Under Caddy a tcp probe still needs a health_uri for the
+edge, so Validate refuses `probe: tcp` there unless a path is given too.
+
+Both widen what agrees; neither loosens Japode, whose services keep expose and HTTP
+probes and still pass the stricter reading.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

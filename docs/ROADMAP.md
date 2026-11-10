@@ -4,10 +4,10 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-- 💭 **JCT9** (deps: JCT3 ✅, JCT4 ✅) **One product instanced per client silo needs one manifest per client, though only the host and the key differ** — Viglet Cloud renders per-client Turing, Shio and Dumont from clients.yaml, and a manifest per copy would be the drift jcloud exists to stop. → §JCT9
 - 📋 **JCT10** (deps: JCT3 ✅, JCT4 ✅, JCT5 ✅, JCT6 ✅, JCT7 ✅, JCT8 ✅) **Contract tests read only a Japode checkout, so nothing proves a second platform still agrees after a jcloud change** — Applying jcloud to Viglet Cloud is this block's acceptance test, and it must run in jcloud CI, not once by hand. → §JCT10
 - 📋 **JCT18** (deps: —) **A route gated by auth_request is reported forever, since no manifest field can state the gate** — Every Viglet Cloud per-client host runs auth_request to client-gate, so those routes cannot agree whatever their manifest says. → §JCT18
 - 📋 **JCT19** (deps: —) **Japode's check script passes no compose model, so its services still go through the substring compose check** — That check passes on a commented-out line, and keeping it beside the model leaves two rules for one fact. → §JCT19
+- 📋 **JCT20** (deps: —) **agree demands an exposed port and an HTTP health path, so a service on a user network with a TCP probe cannot agree** — Every Viglet Cloud product is reached over its network and probed by TCP connect, so each would be refused on how it is reached. → §JCT20
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

@@ -63,6 +63,18 @@ type Manifest struct {
 	// Absent, it is the short name upper-cased with `-` as `_`, which is what the
 	// Japode platform's keys have always been. EnvPrefix answers either.
 	EnvPrefixDecl string `yaml:"env_prefix"`
+
+	// Copies of this service a platform renders per client (JCT9), each a compose
+	// service of its own. Declared by template, never listed: the platform's
+	// generator owns the registry, and the copies are found in the compose model.
+	Instances *Instances `yaml:"instances"`
+}
+
+// Instances names a service's per-client copies by templates over {client}.
+type Instances struct {
+	Service string `yaml:"service"` // the compose service, e.g. turing-{client}
+	Host    string `yaml:"host"`    // its route's host, e.g. turing-{client}.viglet.cloud
+	Profile string `yaml:"profile"` // its compose profile, e.g. client-{client}
 }
 
 type Health struct {
@@ -428,6 +440,16 @@ func (m *Manifest) validateNeeds() []string {
 	// refused here first.
 	if m.Profile != "" && !profileRE.MatchString(m.Profile) {
 		bad("profile: %q is not a compose profile name", m.Profile)
+	}
+	if in := m.Instances; in != nil {
+		if strings.Count(in.Service, "{client}") != 1 {
+			bad("instances.service: %q has to name {client} exactly once — it is how a copy is told from another", in.Service)
+		}
+		for _, f := range []struct{ key, value string }{{"host", in.Host}, {"profile", in.Profile}} {
+			if f.value != "" && !strings.Contains(f.value, "{client}") {
+				bad("instances.%s: %q does not name {client}, so every copy would share it", f.key, f.value)
+			}
+		}
 	}
 	if m.EnvPrefixDecl != "" && !envPrefixRE.MatchString(m.EnvPrefixDecl) {
 		bad("env_prefix: %q is not a variable prefix: upper case, digits and _, ending in _ so that it is a whole word of every key", m.EnvPrefixDecl)
