@@ -66,6 +66,10 @@ host:                                  # absent: nothing about the host is asser
       mode: "750"
       owner: runner:runner             # optional
   firewall: ufw                        # must be installed and active
+  disks: [/, /var/lib/docker]          # each filesystem must keep
+  disk_free: 15%                       #   this much free
+  certs: [caddy/certificates/*/*.crt]  # each certificate file (a glob) must stay
+  cert_days: 14                        #   valid this many days more
 ```
 
 A manifest names its own keys' prefix with `env_prefix: VIGLET_TURING_` (the default is
@@ -81,8 +85,10 @@ local `docker` which containers are up (stripping `container_prefix`), how each 
 and which digest it runs, reads each service's pin from `pin_file`, and reports each
 profile a manifest declares as `on` when `COMPOSE_PROFILES` names it or one of its
 services is up. When `jcloud.yml` declares `host:`, it also reads those timers
-(`systemctl is-active`), paths (`stat`) and the firewall (`ufw status`), and `survey`
-reports each one that differs or could not be read. It reaches no network. Getting its output to `survey` is the platform's
+(`systemctl is-active` and each unit's last run), paths (`stat`), the firewall (`ufw
+status`), free space (`df`) and certificate expiry (read from the file, never by
+connecting), and `survey` reports each one that differs or could not be read. It reaches
+no network. Getting its output to `survey` is the platform's
 job, for example `ssh host 'cd /srv/platform && jcloud observe' > observed.txt`.
 
 With `kind: nginx`, `agree --routes` takes the output of `nginx -T`. Each manifest route

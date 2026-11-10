@@ -167,7 +167,7 @@ func ParseProfile(data []byte) (*Profile, error) {
 		p.Builds = *f.Builds
 	}
 	if f.Host != nil {
-		p.Host = Host{Timers: f.Host.Timers, Paths: f.Host.Paths, Firewall: f.Host.Firewall}
+		p.Host = f.Host.host()
 	}
 
 	if problems := p.Validate(); len(problems) > 0 {

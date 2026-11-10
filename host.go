@@ -45,6 +45,13 @@ type Host struct {
 	Timers   []HostTimer
 	Paths    []HostPath
 	Firewall string // "" for none asserted, or the firewall that must be active
+
+	// Capacity (JCT25, host_capacity.go): filesystems and the free share each must
+	// keep, certificate files and the days each must stay valid.
+	Disks    []string
+	DiskFree string
+	Certs    []string
+	CertDays int
 }
 
 // HostTimer is one timer that must be active (JCT23), and whose unit's last run
@@ -97,6 +104,15 @@ type hostFile struct {
 	Timers   []HostTimer `yaml:"timers"`
 	Paths    []HostPath  `yaml:"paths"`
 	Firewall string      `yaml:"firewall"`
+	Disks    []string    `yaml:"disks"`
+	DiskFree string      `yaml:"disk_free"`
+	Certs    []string    `yaml:"certs"`
+	CertDays int         `yaml:"cert_days"`
+}
+
+func (f hostFile) host() Host {
+	return Host{Timers: f.Timers, Paths: f.Paths, Firewall: f.Firewall,
+		Disks: f.Disks, DiskFree: f.DiskFree, Certs: f.Certs, CertDays: f.CertDays}
 }
 
 // firewalls is every firewall this build can read.
@@ -141,6 +157,7 @@ func (h Host) validate() []string {
 	if h.Firewall != "" && !contains(firewalls, h.Firewall) {
 		bad("host.firewall is %q, and this build reads %s", h.Firewall, strings.Join(firewalls, ", "))
 	}
+	h.validateCapacity(bad)
 	return out
 }
 
@@ -150,6 +167,8 @@ func (h Host) validate() []string {
 //	lastrun  <timer>     <Result of its unit>    success, exit-code, … (JCT24)
 //	finished <timer>     <unix seconds>          never, or unknown (JCT24)
 //	clock    host        <unix seconds>          the host's now, which an age is from
+//	disk     <path>      <percent free>          (JCT25, host_capacity.go)
+//	cert     <file>      <unix NotAfter>         (JCT25, host_capacity.go)
 //	path     <path>      <mode> <user:group>     unknown unknown when stat failed
 //	firewall ufw         <status>                absent, or unreadable without root
 func observeHost(root string, h Host, run commandRunner) []string {
@@ -157,6 +176,12 @@ func observeHost(root string, h Host, run commandRunner) []string {
 	if len(h.Timers) > 0 {
 		lines = append(lines, observeTimers(h.Timers, run)...)
 	}
+	// Every age (a last run, a certificate) is counted from the host's own clock.
+	if len(h.Timers) > 0 || len(h.Certs) > 0 {
+		lines = append(lines, fmt.Sprintf("clock host %d", now().Unix()))
+	}
+	lines = append(lines, observeDisks(root, h.Disks, run)...)
+	lines = append(lines, observeCerts(root, h.Certs)...)
 	for _, p := range h.Paths {
 		// Slashes, because stat runs on a Linux host whatever built this.
 		at := p.Path
@@ -249,7 +274,7 @@ func observeTimers(timers []HostTimer, run commandRunner) []string {
 			fmt.Sprintf("lastrun %s %s", t.Name, word(results, i)),
 			fmt.Sprintf("finished %s %s", t.Name, word(finished, i)))
 	}
-	return append(lines, fmt.Sprintf("clock host %d", now().Unix()))
+	return lines
 }
 
 // surveyTimer holds one timer to what jcloud.yml declares of it. An inactive timer
@@ -307,6 +332,7 @@ func surveyHost(h Host, o *Observed) []Divergence {
 	for _, t := range h.Timers {
 		out = append(out, surveyTimer(t, o)...)
 	}
+	out = append(out, surveyCapacity(h, o)...)
 	for _, p := range h.Paths {
 		got, seen := o.Paths[p.Path]
 		switch {

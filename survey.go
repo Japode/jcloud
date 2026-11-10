@@ -60,6 +60,11 @@ type Observed struct {
 	LastRun  map[string]string
 	Finished map[string]string
 	Clock    map[string]int64
+
+	// Capacity (JCT25): percent free per declared filesystem, NotAfter per
+	// certificate file.
+	Disks map[string]string
+	Certs map[string]string
 }
 
 func ParseObserved(body string) *Observed {
@@ -74,6 +79,8 @@ func ParseObserved(body string) *Observed {
 		LastRun:    map[string]string{},
 		Finished:   map[string]string{},
 		Clock:      map[string]int64{},
+		Disks:      map[string]string{},
+		Certs:      map[string]string{},
 	}
 	for _, line := range strings.Split(body, "\n") {
 		f := strings.Fields(line)
@@ -103,6 +110,10 @@ func ParseObserved(body string) *Observed {
 			o.LastRun[f[1]] = f[2]
 		case "finished":
 			o.Finished[f[1]] = f[2]
+		case "disk":
+			o.Disks[f[1]] = f[2]
+		case "cert":
+			o.Certs[f[1]] = f[2]
 		case "clock":
 			var secs int64
 			if _, err := fmt.Sscan(f[2], &secs); err == nil {
