@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -83,4 +84,39 @@ func TestSurveyCommandSince(t *testing.T) {
 	if code := survey([]string{"--root", root, "--since"}); code != 2 {
 		t.Fatalf("--since with no path, got exit %d", code)
 	}
+
+	// JCT27: the same report as a document a scheduler keys on, and nothing else
+	// on stdout, inside Actions too.
+	t.Setenv("GITHUB_ACTIONS", "true")
+	stray := write("stray.txt", healthy+"container stray healthy\n")
+	out, code := surveyStdout(t, "--json", "--root", root, "--since", broken, stray)
+	if code != 1 {
+		t.Fatalf("exit %d", code)
+	}
+	var doc struct {
+		Findings []map[string]string `json:"findings"`
+	}
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, out)
+	}
+	want := []map[string]string{
+		{"code": "container.undeclared", "subject": "stray", "says": "running on the server and declared by nothing here", "state": "new"},
+		{"code": "container.missing", "subject": "paste", "says": "declared here and not running on the server", "state": "gone"},
+	}
+	if !reflect.DeepEqual(doc.Findings, want) {
+		t.Fatalf("got %v", doc.Findings)
+	}
+
+	out, code = surveyStdout(t, "--root", root, "--json", fixed)
+	if code != 0 || strings.TrimSpace(out) != "{\n  \"findings\": []\n}" {
+		t.Fatalf("a clean run is an empty list, got %d %q", code, out)
+	}
+}
+
+// surveyStdout is annotate_test.go's captureStdout, keeping the exit code.
+func surveyStdout(t *testing.T, args ...string) (string, int) {
+	t.Helper()
+	var code int
+	out := captureStdout(t, func() { code = survey(args) })
+	return out, code
 }

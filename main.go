@@ -170,7 +170,9 @@ func usage() {
        [--since <previous>]            against what the manifests declare.
        <observations>                  Reads a file, not a host. --since
                                        marks each finding new or standing
-                                       and lists the ones gone since then
+                                       and lists the ones gone since then.
+       [--json]                        --json prints {"findings": [...]},
+                                       each with a stable code and subject
   jcloud observe [--root <dir>]        run on the host, in the deployed tree:
                                        print what survey reads, from the local
                                        docker and the deploy's pin file

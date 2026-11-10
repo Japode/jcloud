@@ -28,6 +28,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -406,13 +407,41 @@ func readObservations(path string) (*Observed, error) {
 	return ParseObserved(string(body)), nil
 }
 
-const surveyUsage = "jcloud survey [--root <dir>] [--since <previous observations>] <observations>"
+const surveyUsage = "jcloud survey [--root <dir>] [--since <previous observations>] [--json] <observations>"
+
+// finding is one line of `survey --json` (JCT27): what a scheduler keys an alert on
+// is code and subject, and says is free to be reworded.
+type finding struct {
+	Code    string `json:"code"`
+	Subject string `json:"subject"`
+	Says    string `json:"says"`
+	State   string `json:"state,omitempty"` // new, standing or gone, with --since
+}
+
+// printJSON is the whole report as one document on stdout, and nothing else there:
+// no annotation and no colour, so `jq` reads it as it comes.
+func printJSON(changes []Change, gone []Divergence) {
+	out := struct {
+		Findings []finding `json:"findings"`
+	}{Findings: []finding{}}
+	for _, c := range changes {
+		out.Findings = append(out.Findings, finding{c.Code, c.Service, c.Says, c.State})
+	}
+	for _, g := range gone {
+		out.Findings = append(out.Findings, finding{g.Code, g.Service, g.Says, "gone"})
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(out)
+}
 
 // survey is the command.
 func survey(args []string) int {
-	root, since, observations := ".", "", ""
+	root, since, observations, asJSON := ".", "", "", false
 	for len(args) > 0 {
 		switch args[0] {
+		case "--json":
+			asJSON, args = true, args[1:]
 		case "--root", "--since":
 			if len(args) < 2 {
 				fmt.Fprintf(os.Stderr, "jcloud survey: %s takes a path\n", args[0])
@@ -464,6 +493,13 @@ func survey(args []string) int {
 	var gone []Divergence
 	if previous != nil {
 		changes, gone = Since(SurveyAgainst(d, previous), divergences)
+	}
+	if asJSON {
+		printJSON(changes, gone)
+		if len(divergences) > 0 {
+			return 1
+		}
+		return 0
 	}
 
 	// Gone first and on stdout, with the ✓: it is good news, and the exit code is

@@ -24,7 +24,9 @@ jcloud compare <ours.yml> <theirs.yml>          where two copies of a manifest d
 jcloud survey [--root <dir>] <observations>     the server as observed, against what
       [--since <previous observations>]         services/*/ declares; --since marks
                                                 each finding new or standing, and
-                                                lists the ones gone
+                                                lists the ones gone; --json prints
+                                                each with a stable code (such as
+                                                disk.low) and its subject
 jcloud observe [--root <dir>]                   run on the host: print what survey
                                                 reads, from the local docker
 jcloud up [<service> …] [--root <dir>] …        what stands between a service and a deploy

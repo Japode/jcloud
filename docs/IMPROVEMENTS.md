@@ -96,23 +96,6 @@ Once this lands, Japode's `survey-server.sh` can shrink to `ssh … jcloud obser
 its timers, mode and firewall moved into its `jcloud.yml`. That switch is filed in the
 cloud repo, not here.
 
-### §JCT27 Findings a scheduler can key on
-
-`survey` prints sentences for a reader. A scheduler that wants one alert per fact has to
-parse them, and the day a sentence is reworded the alert closes and a new one opens for
-a fact that never changed.
-
-The codes already exist: JCT26 gave every `Divergence` a `Code` (`container.missing`,
-`container.unhealthy`, `container.undeclared`, `digest.moved`, `timer.inactive`,
-`timer.failed`, `backup.stale`, `disk.low`, `cert.expiring`, `cert.expired`,
-`path.mode`, `firewall.off`, and a `<kind>.unread` for each fact that could not be
-measured), and `Key()` is code plus subject. What is left is printing them.
-
-`survey --json` prints one object per finding, `{"code", "subject", "says"}`, and with
-`--since` a `"state"` of `new` or `standing`, plus the gone ones with `"state": "gone"`.
-The exit code is unchanged. The prose form stays the default and stays what a person
-reads in CI.
-
 ### §JCT28 A watch that runs itself
 
 Every piece above is a command a person has to remember to run. Monitoring is the same
