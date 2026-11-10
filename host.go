@@ -282,24 +282,24 @@ func observeTimers(timers []HostTimer, run commandRunner) []string {
 // fault, the way survey does not compare the digest of a container that is not up.
 func surveyTimer(t HostTimer, o *Observed) []Divergence {
 	unit := t.Name + ".timer"
-	one := func(says string) []Divergence { return []Divergence{{unit, says}} }
+	one := func(code, says string) []Divergence { return []Divergence{{unit, says, code}} }
 	switch state, seen := o.Timers[t.Name]; {
 	case !seen:
-		return one("is declared in jcloud.yml host.timers and the observations do not report it")
+		return one("timer.unread", "is declared in jcloud.yml host.timers and the observations do not report it")
 	case state == "unknown":
-		return one("could not be read — systemctl did not answer on the host")
+		return one("timer.unread", "could not be read — systemctl did not answer on the host")
 	case state != "active":
-		return one(fmt.Sprintf("is %s, not active, so the job it schedules never fires", state))
+		return one("timer.inactive", fmt.Sprintf("is %s, not active, so the job it schedules never fires", state))
 	}
 
 	var out []Divergence
 	switch result, seen := o.LastRun[t.Name]; {
 	case !seen:
-		out = append(out, Divergence{unit, "is active and the observations do not say how its last run ended"})
+		out = append(out, Divergence{unit, "is active and the observations do not say how its last run ended", "run.unread"})
 	case result == "unknown":
-		out = append(out, Divergence{unit, "is active and how its last run ended could not be read"})
+		out = append(out, Divergence{unit, "is active and how its last run ended could not be read", "run.unread"})
 	case result != "success":
-		out = append(out, Divergence{unit, fmt.Sprintf("is active and its last run ended in %s — the schedule exists and the job fails", result)})
+		out = append(out, Divergence{unit, fmt.Sprintf("is active and its last run ended in %s — the schedule exists and the job fails", result), "timer.failed"})
 	}
 
 	if t.MaxAge == "" {
@@ -312,15 +312,15 @@ func surveyTimer(t HostTimer, o *Observed) []Divergence {
 	}
 	switch at, seen := o.Finished[t.Name]; {
 	case !seen || at == "unknown":
-		out = append(out, Divergence{unit, fmt.Sprintf("has a max_age of %s and when its last run finished could not be read", t.MaxAge)})
+		out = append(out, Divergence{unit, fmt.Sprintf("has a max_age of %s and when its last run finished could not be read", t.MaxAge), "backup.unread"})
 	case at == "never":
-		out = append(out, Divergence{unit, fmt.Sprintf("has never finished a run, and jcloud.yml accepts none older than %s", t.MaxAge)})
+		out = append(out, Divergence{unit, fmt.Sprintf("has never finished a run, and jcloud.yml accepts none older than %s", t.MaxAge), "backup.stale"})
 	default:
 		var secs int64
 		if _, err := fmt.Sscan(at, &secs); err != nil {
-			out = append(out, Divergence{unit, fmt.Sprintf("finished at %q, which is not a time", at)})
+			out = append(out, Divergence{unit, fmt.Sprintf("finished at %q, which is not a time", at), "backup.unread"})
 		} else if age := clock.Sub(time.Unix(secs, 0)); age > maxAge {
-			out = append(out, Divergence{unit, fmt.Sprintf("last finished %s ago, older than the %s jcloud.yml accepts", age.Round(time.Minute), t.MaxAge)})
+			out = append(out, Divergence{unit, fmt.Sprintf("last finished %s ago, older than the %s jcloud.yml accepts", age.Round(time.Minute), t.MaxAge), "backup.stale"})
 		}
 	}
 	return out
@@ -337,30 +337,30 @@ func surveyHost(h Host, o *Observed) []Divergence {
 		got, seen := o.Paths[p.Path]
 		switch {
 		case !seen:
-			out = append(out, Divergence{p.Path, "is declared in jcloud.yml host.paths and the observations do not report it"})
+			out = append(out, Divergence{p.Path, "is declared in jcloud.yml host.paths and the observations do not report it", "path.unread"})
 			continue
 		case got[0] == "unknown":
-			out = append(out, Divergence{p.Path, "could not be read — stat failed on the host"})
+			out = append(out, Divergence{p.Path, "could not be read — stat failed on the host", "path.unread"})
 			continue
 		}
 		if p.Mode != "" && strings.TrimLeft(got[0], "0") != strings.TrimLeft(p.Mode, "0") {
-			out = append(out, Divergence{p.Path, fmt.Sprintf("is mode %s and not %s, which jcloud.yml declares", got[0], p.Mode)})
+			out = append(out, Divergence{p.Path, fmt.Sprintf("is mode %s and not %s, which jcloud.yml declares", got[0], p.Mode), "path.mode"})
 		}
 		if p.Owner != "" && got[1] != p.Owner {
-			out = append(out, Divergence{p.Path, fmt.Sprintf("is owned by %s and not %s, which jcloud.yml declares", got[1], p.Owner)})
+			out = append(out, Divergence{p.Path, fmt.Sprintf("is owned by %s and not %s, which jcloud.yml declares", got[1], p.Owner), "path.owner"})
 		}
 	}
 	if h.Firewall != "" {
 		switch state, seen := o.Firewalls[h.Firewall]; {
 		case !seen:
-			out = append(out, Divergence{h.Firewall, "is declared in jcloud.yml host.firewall and the observations do not report it"})
+			out = append(out, Divergence{h.Firewall, "is declared in jcloud.yml host.firewall and the observations do not report it", "firewall.unread"})
 		case state == "active":
 		case state == "absent":
-			out = append(out, Divergence{h.Firewall, "is not installed, so nothing on this host filters anything"})
+			out = append(out, Divergence{h.Firewall, "is not installed, so nothing on this host filters anything", "firewall.off"})
 		case state == "unreadable":
-			out = append(out, Divergence{h.Firewall, "could not be read — its status needs root, and the collector ran without it"})
+			out = append(out, Divergence{h.Firewall, "could not be read — its status needs root, and the collector ran without it", "firewall.unread"})
 		default:
-			out = append(out, Divergence{h.Firewall, fmt.Sprintf("is %s, so nothing on this host filters anything", state)})
+			out = append(out, Divergence{h.Firewall, fmt.Sprintf("is %s, so nothing on this host filters anything", state), "firewall.off"})
 		}
 	}
 	return out

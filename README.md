@@ -22,7 +22,9 @@ jcloud agree [--routes <file>] <root> <yml> …    …and compare it against the
                                                 own compose file
 jcloud compare <ours.yml> <theirs.yml>          where two copies of a manifest disagree
 jcloud survey [--root <dir>] <observations>     the server as observed, against what
-                                                services/*/ declares
+      [--since <previous observations>]         services/*/ declares; --since marks
+                                                each finding new or standing, and
+                                                lists the ones gone
 jcloud observe [--root <dir>]                   run on the host: print what survey
                                                 reads, from the local docker
 jcloud up [<service> …] [--root <dir>] …        what stands between a service and a deploy

@@ -126,10 +126,19 @@ func ParseObserved(body string) *Observed {
 
 // Divergence is one disagreement, named by the service it is about so a report can be
 // read service by service rather than assertion by assertion.
+//
+// Code is the finding's kind, stable across rewordings of Says (JCT26): code and
+// subject together are what one finding is, so two runs can be compared by them and
+// a scheduler can key one alert on them. A sentence is for a reader and changes;
+// the code changes only when the fact does.
 type Divergence struct {
 	Service string
 	Says    string
+	Code    string
 }
+
+// Key is the identity two runs are compared by.
+func (d Divergence) Key() string { return d.Code + " " + d.Service }
 
 // Declared is everything this repository says should be up, and the distinction that
 // matters is which of them the deploy pins a digest for.
@@ -171,9 +180,9 @@ func standing(name string, o *Observed) *Divergence {
 	case !up:
 		// The state fespsp-iwl is in as this is written: declared in JC90, never
 		// deployed, and the only thing that ever said so was a deploy failing.
-		return &Divergence{name, "declared here and not running on the server"}
+		return &Divergence{name, "declared here and not running on the server", "container.missing"}
 	case status != "healthy":
-		return &Divergence{name, fmt.Sprintf("running and %s, not healthy", status)}
+		return &Divergence{name, fmt.Sprintf("running and %s, not healthy", status), "container.unhealthy"}
 	}
 	return nil
 }
@@ -192,7 +201,7 @@ func strangers(declared map[string]bool, o *Observed) []Divergence {
 	sort.Strings(names)
 	var out []Divergence
 	for _, name := range names {
-		out = append(out, Divergence{name, "running on the server and declared by nothing here"})
+		out = append(out, Divergence{name, "running on the server and declared by nothing here", "container.undeclared"})
 	}
 	return out
 }
@@ -227,7 +236,7 @@ func SurveyAgainst(d Declared, o *Observed) []Divergence {
 			// about a container that is not there would be a second complaint about
 			// one fault. Unhealthy is not — it is up, on some digest, and which one
 			// is exactly what somebody reading this wants next.
-			if strings.Contains(bad.Says, "not running") {
+			if bad.Code == "container.missing" {
 				continue
 			}
 		}
@@ -246,7 +255,7 @@ func SurveyAgainst(d Declared, o *Observed) []Divergence {
 		if pinned != running {
 			out = append(out, Divergence{service, fmt.Sprintf(
 				"is running %s and the deploy has %s pinned — the next deploy would change it back",
-				shortDigest(running), shortDigest(pinned))})
+				shortDigest(running), shortDigest(pinned)), "digest.moved"})
 		}
 	}
 
@@ -344,49 +353,101 @@ func DeclaredIn(root string) (Declared, error) {
 	return d, nil
 }
 
+// Change is one finding of this run, against the run before it (JCT26).
+type Change struct {
+	Divergence
+	State string // "new" or "standing"
+}
+
+// Since splits this run's findings by the last run's, compared by Key and never by
+// wording: new since then, still standing, and gone. Both runs are judged against
+// the same tree, so a finding that moved is the server moving, not the rules.
+func Since(previous, current []Divergence) (changes []Change, gone []Divergence) {
+	was, is := map[string]bool{}, map[string]bool{}
+	for _, d := range previous {
+		was[d.Key()] = true
+	}
+	for _, d := range current {
+		is[d.Key()] = true
+		state := "new"
+		if was[d.Key()] {
+			state = "standing"
+		}
+		changes = append(changes, Change{d, state})
+	}
+	for _, d := range previous {
+		if !is[d.Key()] {
+			gone = append(gone, d)
+			is[d.Key()] = true // one fact reported twice in the last run is gone once
+		}
+	}
+	return changes, gone
+}
+
+// readObservations reads one collector's file.
+//
+// An empty file is refused and an empty *server* is not, which is a distinction the
+// first draft got wrong: it read "no containers" as a collector that never reached
+// the host, and so refused to survey a machine that had been bootstrapped and not
+// yet deployed to — a real state, and one worth a real answer.
+//
+// It is safe to be this permissive because the failure is loud: a server running
+// nothing reports every declared service as not running, which is red. The silence
+// JC66 warns about would be the opposite, and cannot arise — `jcloud observe` exits
+// non-zero rather than print nothing when it cannot ask the host.
+func readObservations(path string) (*Observed, error) {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(string(body)) == "" {
+		return nil, fmt.Errorf("%s is empty — that is a collector that gathered nothing, not a server in agreement", path)
+	}
+	return ParseObserved(string(body)), nil
+}
+
+const surveyUsage = "jcloud survey [--root <dir>] [--since <previous observations>] <observations>"
+
 // survey is the command.
 func survey(args []string) int {
-	root := "."
-	observations := ""
+	root, since, observations := ".", "", ""
 	for len(args) > 0 {
 		switch args[0] {
-		case "--root":
+		case "--root", "--since":
 			if len(args) < 2 {
-				fmt.Fprintln(os.Stderr, "jcloud survey: --root takes a path")
+				fmt.Fprintf(os.Stderr, "jcloud survey: %s takes a path\n", args[0])
 				return 2
 			}
-			root, args = args[1], args[2:]
+			if args[0] == "--root" {
+				root = args[1]
+			} else {
+				since = args[1]
+			}
+			args = args[2:]
 		default:
 			if observations != "" {
-				fmt.Fprintln(os.Stderr, "jcloud survey [--root <dir>] <observations>")
+				fmt.Fprintln(os.Stderr, surveyUsage)
 				return 2
 			}
 			observations, args = args[0], args[1:]
 		}
 	}
 	if observations == "" {
-		fmt.Fprintln(os.Stderr, "jcloud survey [--root <dir>] <observations>\n\nThe observations are what `jcloud observe` prints on the host, carried here by\nwhatever holds the credential to reach it — this command reaches no network (JC96).")
+		fmt.Fprintln(os.Stderr, surveyUsage+"\n\nThe observations are what `jcloud observe` prints on the host, carried here by\nwhatever holds the credential to reach it — this command reaches no network (JC96).\n--since names the last run's file; where it is kept is the caller's, as jcloud keeps no state.")
 		return 2
 	}
 
-	body, err := os.ReadFile(observations)
+	o, err := readObservations(observations)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "jcloud survey: %v\n", err)
 		return 2
 	}
-	o := ParseObserved(string(body))
-	// An empty file is refused and an empty *server* is not, which is a distinction
-	// the first draft got wrong: it read "no containers" as a collector that never
-	// reached the host, and so refused to survey a machine that had been bootstrapped
-	// and not yet deployed to — a real state, and one worth a real answer.
-	//
-	// It is safe to be this permissive here because the failure is loud: a server
-	// running nothing reports every declared service as not running, which is red.
-	// The silence JC66 warns about would be the opposite, and cannot arise — and the
-	// collector refuses an empty answer from the host before it ever writes this file.
-	if strings.TrimSpace(string(body)) == "" {
-		fmt.Fprintf(os.Stderr, "jcloud survey: %s is empty — that is a collector that gathered nothing, not a server in agreement\n", observations)
-		return 2
+	var previous *Observed
+	if since != "" {
+		if previous, err = readObservations(since); err != nil {
+			fmt.Fprintf(os.Stderr, "jcloud survey: --since: %v\n", err)
+			return 2
+		}
 	}
 
 	d, err := DeclaredIn(root)
@@ -396,6 +457,20 @@ func survey(args []string) int {
 	}
 
 	divergences := SurveyAgainst(d, o)
+	changes := make([]Change, len(divergences))
+	for i, d := range divergences {
+		changes[i] = Change{d, ""}
+	}
+	var gone []Divergence
+	if previous != nil {
+		changes, gone = Since(SurveyAgainst(d, previous), divergences)
+	}
+
+	// Gone first and on stdout, with the ✓: it is good news, and the exit code is
+	// still this run's verdict alone.
+	for _, g := range gone {
+		fmt.Printf("  \033[32m✓\033[0m [gone] %s %s\n", g.Service, g.Says)
+	}
 	if len(divergences) == 0 {
 		fmt.Printf("  \033[32m✓\033[0m %d service(s) on the digest pinned for each, and %d other container(s) this repository declares\n",
 			len(d.Services), len(d.Others))
@@ -403,10 +478,22 @@ func survey(args []string) int {
 		return 0
 	}
 
-	for _, d := range divergences {
-		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s %s\n", d.Service, d.Says)
-		annotate("error", "", d.Service+" "+d.Says)
+	fresh := 0
+	for _, c := range changes {
+		tag := ""
+		if c.State != "" {
+			tag = "[" + c.State + "] "
+		}
+		if c.State == "new" {
+			fresh++
+		}
+		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s%s %s\n", tag, c.Service, c.Says)
+		annotate("error", "", c.Service+" "+c.Says)
 	}
-	fmt.Fprintf(os.Stderr, "\n\033[31m%d divergence(s) between this repository and the server\033[0m\n", len(divergences))
+	summary := fmt.Sprintf("%d divergence(s) between this repository and the server", len(divergences))
+	if previous != nil {
+		summary += fmt.Sprintf(": %d new, %d standing, %d gone since the last run", fresh, len(divergences)-fresh, len(gone))
+	}
+	fmt.Fprintf(os.Stderr, "\n\033[31m%s\033[0m\n", summary)
 	return 1
 }

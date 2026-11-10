@@ -149,11 +149,11 @@ func surveyCapacity(h Host, o *Observed) []Divergence {
 			free, seen := o.Disks[d]
 			switch n, err := strconv.Atoi(free); {
 			case !seen:
-				out = append(out, Divergence{d, "is declared in jcloud.yml host.disks and the observations do not report it"})
+				out = append(out, Divergence{d, "is declared in jcloud.yml host.disks and the observations do not report it", "disk.unread"})
 			case err != nil:
-				out = append(out, Divergence{d, "could not be read — df did not answer on the host"})
+				out = append(out, Divergence{d, "could not be read — df did not answer on the host", "disk.unread"})
 			case n < floor:
-				out = append(out, Divergence{d, fmt.Sprintf("has %d%% free, %d points under the %s floor jcloud.yml declares", n, floor-n, h.DiskFree)})
+				out = append(out, Divergence{d, fmt.Sprintf("has %d%% free, %d points under the %s floor jcloud.yml declares", n, floor-n, h.DiskFree), "disk.low"})
 			}
 		}
 	}
@@ -175,21 +175,21 @@ func surveyCapacity(h Host, o *Observed) []Divergence {
 			secs, err := strconv.ParseInt(expiry, 10, 64)
 			switch {
 			case expiry == "none":
-				out = append(out, Divergence{pattern, "matched no certificate on the host, so nothing it names can be held to a floor"})
+				out = append(out, Divergence{pattern, "matched no certificate on the host, so nothing it names can be held to a floor", "cert.missing"})
 			case err != nil:
-				out = append(out, Divergence{file, "could not be read as a PEM certificate"})
+				out = append(out, Divergence{file, "could not be read as a PEM certificate", "cert.unread"})
 			default:
 				left := time.Unix(secs, 0).Sub(clock)
 				switch {
 				case left <= 0:
-					out = append(out, Divergence{file, fmt.Sprintf("expired %d day(s) ago, on %s", int(-left.Hours()/24), time.Unix(secs, 0).UTC().Format("2006-01-02"))})
+					out = append(out, Divergence{file, fmt.Sprintf("expired %d day(s) ago, on %s", int(-left.Hours()/24), time.Unix(secs, 0).UTC().Format("2006-01-02")), "cert.expired"})
 				case left < floor:
-					out = append(out, Divergence{file, fmt.Sprintf("expires in %d day(s), on %s, under the %d-day floor jcloud.yml declares", int(left.Hours()/24), time.Unix(secs, 0).UTC().Format("2006-01-02"), h.CertDays)})
+					out = append(out, Divergence{file, fmt.Sprintf("expires in %d day(s), on %s, under the %d-day floor jcloud.yml declares", int(left.Hours()/24), time.Unix(secs, 0).UTC().Format("2006-01-02"), h.CertDays), "cert.expiring"})
 				}
 			}
 		}
 		if !matched {
-			out = append(out, Divergence{pattern, "is declared in jcloud.yml host.certs and the observations do not report it"})
+			out = append(out, Divergence{pattern, "is declared in jcloud.yml host.certs and the observations do not report it", "cert.unread"})
 		}
 	}
 	// By subject, since the certificates were read off a map.

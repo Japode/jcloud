@@ -167,8 +167,10 @@ func usage() {
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
   jcloud survey [--root <dir>]         the server, as jcloud observe saw it,
-       <observations>                  against what the manifests declare.
-                                       Reads a file, not a host.
+       [--since <previous>]            against what the manifests declare.
+       <observations>                  Reads a file, not a host. --since
+                                       marks each finding new or standing
+                                       and lists the ones gone since then
   jcloud observe [--root <dir>]        run on the host, in the deployed tree:
                                        print what survey reads, from the local
                                        docker and the deploy's pin file

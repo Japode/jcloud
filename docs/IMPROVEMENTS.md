@@ -96,31 +96,22 @@ Once this lands, Japode's `survey-server.sh` can shrink to `ssh … jcloud obser
 its timers, mode and firewall moved into its `jcloud.yml`. That switch is filed in the
 cloud repo, not here.
 
-### §JCT26 What changed since the last run
-
-Run twice, `survey` prints the same report whether the drift is a year old or an hour
-old. A watch run every few minutes then has two bad choices: alert on every run, or
-alert on nothing, because it cannot tell a new failure from one everyone already knows.
-
-`survey --since <previous observations>` compares the two runs as well as the tree, and
-splits the findings in three: new since the last run, still standing, and gone. The exit
-code stays the tree's verdict; the split is what a scheduler acts on.
-
-The previous file is passed, never stored: jcloud keeps no state, so where the last run
-lives is the caller's decision, like the transport.
-
 ### §JCT27 Findings a scheduler can key on
 
 `survey` prints sentences for a reader. A scheduler that wants one alert per fact has to
 parse them, and the day a sentence is reworded the alert closes and a new one opens for
 a fact that never changed.
 
-`survey --json` prints each finding with a stable code (`container.missing`,
-`digest.moved`, `timer.failed`, `backup.stale`, `disk.low`, `cert.expiring`), the
-subject it is about, and with `--since` its state: new, standing or gone. The code and
-subject together are the alert's key, so rewording the prose touches nothing.
+The codes already exist: JCT26 gave every `Divergence` a `Code` (`container.missing`,
+`container.unhealthy`, `container.undeclared`, `digest.moved`, `timer.inactive`,
+`timer.failed`, `backup.stale`, `disk.low`, `cert.expiring`, `cert.expired`,
+`path.mode`, `firewall.off`, and a `<kind>.unread` for each fact that could not be
+measured), and `Key()` is code plus subject. What is left is printing them.
 
-The prose form stays the default and stays what a person reads in CI.
+`survey --json` prints one object per finding, `{"code", "subject", "says"}`, and with
+`--since` a `"state"` of `new` or `standing`, plus the gone ones with `"state": "gone"`.
+The exit code is unchanged. The prose form stays the default and stays what a person
+reads in CI.
 
 ### §JCT28 A watch that runs itself
 
