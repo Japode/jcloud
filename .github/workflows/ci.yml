@@ -1,9 +1,13 @@
 name: ci
 
+# site/ is the product page, gated by site.yml; nothing in it is Go, so a change there
+# alone does not run this (JCT14). A change touching both runs both.
 on:
   push:
     branches: [main]
+    paths-ignore: ["site/**", ".github/workflows/site.yml"]
   pull_request:
+    paths-ignore: ["site/**", ".github/workflows/site.yml"]
 
 permissions:
   contents: read

@@ -168,20 +168,6 @@ after every jcloud change.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-### §JCT14 JCT14 — the Pages workflow
-
-Revelei's `.github/workflows/site.yml` is the template: the build is the gate on every
-push and pull request that touches `site/**`, and the deploy to Pages fires on
-`workflow_dispatch` only, from the bytes the gate built rather than a second build. The
-Pages grants live on the deploy job alone; the gate runs with `contents: read`.
-
-The existing Go workflows must ignore `site/**`, and site.yml must ignore everything
-else, so a site change never runs the Go gate and the reverse.
-
-One-time repository setting, recorded in the workflow header: Settings, Pages, Source:
-GitHub Actions. The page is then served at japode.com/jcloud/, which Pages derives from
-the repository name; `vite.config.ts` carries the same `/jcloud/` base.
-
 ### §JCT15 JCT15 — discoverability and the Japode family
 
 A page nobody can find or share is half a page. Following Revelei (PB49, PB50):

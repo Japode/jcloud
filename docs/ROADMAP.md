@@ -16,8 +16,7 @@
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-- 📋 **JCT14** (deps: JCT11 ✅) **Nothing builds or publishes site/, so the page exists only on the machine it was written on** — GitHub Pages serves the repository at japode.com/jcloud/ once a workflow deploys it, and the build must be gated before anyone publishes. → §JCT14
-- 📋 **JCT15** (deps: JCT11 ✅, JCT14) **The page declares no canonical, social card or link to Japode, so search and shares lose it** — A page that search engines cannot attribute and a link that unfurls blank are the two ways a product page goes unread. → §JCT15
+- 📋 **JCT15** (deps: JCT11 ✅, JCT14 ✅) **The page declares no canonical, social card or link to Japode, so search and shares lose it** — A page that search engines cannot attribute and a link that unfurls blank are the two ways a product page goes unread. → §JCT15
 
 ## Done when — Block B
 

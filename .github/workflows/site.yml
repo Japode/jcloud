@@ -1,0 +1,104 @@
+# The product page (site/), separate from the Go module: ci/check.sh neither builds nor
+# needs it, and ci.yml ignores site/**. After Revelei's site.yml (JCT14).
+#
+# Publishing is deliberate: the deploy fires on workflow_dispatch only. A deploy on every
+# push is one nobody can hold still while reviewing it, and the page is the one artefact
+# where a defect is public immediately. Dispatch it again after a release, too: the install
+# commands name the newest tag as of the build.
+#
+# The gate is the build: `npm run build` runs tsc, builds the client and the SSR bundle and
+# prerenders both languages, and the prerender's replace-or-throw head patches are the head
+# gates. It runs on every push and pull request that touches the site, so a break is found by
+# whoever pushed it rather than by whoever publishes next.
+#
+# ONE-TIME REPOSITORY SETTING, without which the deploy is inert:
+#   Settings > Pages > Build and deployment > Source: "GitHub Actions"
+# The page is then served at japode.com/jcloud/ (and /jcloud/pt/), which Pages derives from
+# the repository name; vite.config.ts and src/content.ts carry the same /jcloud/ base.
+
+name: site
+
+on:
+  push:
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  pull_request:
+    paths:
+      - "site/**"
+      - ".github/workflows/site.yml"
+  # A publish builds whatever the chosen ref holds, whether or not the site changed in it.
+  workflow_dispatch:
+
+# Least privilege by default. The Pages grants live on the job that publishes, so a push,
+# which runs this workflow, is never handed the token that can deploy.
+permissions:
+  contents: read
+
+# A publish must not overlap another publish, and two gate runs on two branches have nothing
+# to do with each other. Keying the group on the event keeps a push from cancelling a deploy
+# that is halfway through.
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && 'pages' || format('site-gate-{0}', github.ref) }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (the gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history and the tags: the build reads the newest v* tag for the install
+          # commands and fails without one, and the sitemap's lastmod is the date of the
+          # last commit that touched the site.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Build
+        working-directory: site
+        run: |
+          npm ci
+          npm run build
+
+      # Only what is about to be published is kept. On a push the build is the whole point
+      # and the output is not wanted anywhere.
+      - name: Keep the built site for the deploy
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: site-dist
+          path: site/dist
+          retention-days: 1
+
+  deploy:
+    name: deploy to Pages
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      # The bytes the gate already built, rather than a second build: two builds of one
+      # commit are two answers about it, and the published one would be the unchecked one.
+      - uses: actions/download-artifact@v8
+        with:
+          name: site-dist
+          path: dist
+
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+      - id: deploy
+        uses: actions/deploy-pages@v5
