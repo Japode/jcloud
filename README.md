@@ -57,6 +57,13 @@ backup: backup-conf                    # or none: no backup.conf compared, and
                                        # each sqlite file or database named
 builds: false                          # true: a manifest may say build: <Dockerfile>
 env_example: .env.example              # the template agree holds every key to
+host:                                  # absent: nothing about the host is asserted
+  timers: [japode-backup]              # each <unit>.timer must be active
+  paths:
+    - path: .                          # relative to the root, or absolute
+      mode: "750"
+      owner: runner:runner             # optional
+  firewall: ufw                        # must be installed and active
 ```
 
 A manifest names its own keys' prefix with `env_prefix: VIGLET_TURING_` (the default is
@@ -71,7 +78,9 @@ default. It reads this file and never generates one.
 local `docker` which containers are up (stripping `container_prefix`), how each one stands
 and which digest it runs, reads each service's pin from `pin_file`, and reports each
 profile a manifest declares as `on` when `COMPOSE_PROFILES` names it or one of its
-services is up. It reaches no network. Getting its output to `survey` is the platform's
+services is up. When `jcloud.yml` declares `host:`, it also reads those timers
+(`systemctl is-active`), paths (`stat`) and the firewall (`ufw status`), and `survey`
+reports each one that differs or could not be read. It reaches no network. Getting its output to `survey` is the platform's
 job, for example `ssh host 'cd /srv/platform && jcloud observe' > observed.txt`.
 
 With `kind: nginx`, `agree --routes` takes the output of `nginx -T`. Each manifest route

@@ -15,8 +15,8 @@
 //
 // The names come from jcloud.yml and not from Japode: the container prefix that is
 // stripped, the pin file and the image variable read from it, where the manifests
-// sit. A host fact (a timer, a mode, a firewall) is not here until jcloud.yml can
-// declare one (JCT23), so a platform is never held to Japode's list.
+// sit. The host facts (timers, path modes, a firewall) are read only as jcloud.yml's
+// host: names them (JCT23, host.go), so a platform is never held to Japode's list.
 //
 // **It reads the machine it runs on and reaches no network**, which is JC29's
 // division kept: the transport (SSH, a self-hosted runner, a local timer) is the
@@ -36,8 +36,10 @@ import (
 	"strings"
 )
 
-// commandRunner runs one read-only command and answers its stdout. A variable so the
-// tests can hand back docker's answers without a daemon.
+// commandRunner runs one read-only command and answers its stdout, kept even when
+// the command exits non-zero: `systemctl is-active` does that for an inactive unit
+// and still prints the state. A variable so the tests can hand back the host's
+// answers without a daemon. A command not on PATH wraps exec.ErrNotFound.
 type commandRunner func(name string, args ...string) (string, error)
 
 func runCommand(name string, args ...string) (string, error) {
@@ -47,9 +49,9 @@ func runCommand(name string, args ...string) (string, error) {
 	out, err := cmd.Output()
 	if err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return "", fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, msg)
+			return string(out), fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, msg)
 		}
-		return "", fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
+		return string(out), fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)
 	}
 	return string(out), nil
 }
@@ -93,6 +95,8 @@ func Observe(root string, run commandRunner) ([]string, error) {
 		}
 		lines = append(lines, fmt.Sprintf("profile %s %s", p, state))
 	}
+
+	lines = append(lines, observeHost(root, prof.Host, run)...)
 
 	sort.Strings(lines)
 	return lines, nil

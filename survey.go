@@ -49,6 +49,11 @@ type Observed struct {
 	Pinned     map[string]string // service -> digest in .deploy-state/images.env
 	Running    map[string]string // service -> digest the container is actually on
 	Profiles   map[string]bool   // compose profile -> switched on (JCT4)
+
+	// The host facts jcloud.yml's host: names (JCT23, host.go).
+	Timers    map[string]string    // unit without .timer -> systemctl is-active
+	Paths     map[string][2]string // declared path -> mode, user:group
+	Firewalls map[string]string    // firewall -> its status word
 }
 
 func ParseObserved(body string) *Observed {
@@ -57,6 +62,9 @@ func ParseObserved(body string) *Observed {
 		Pinned:     map[string]string{},
 		Running:    map[string]string{},
 		Profiles:   map[string]bool{},
+		Timers:     map[string]string{},
+		Paths:      map[string][2]string{},
+		Firewalls:  map[string]string{},
 	}
 	for _, line := range strings.Split(body, "\n") {
 		f := strings.Fields(line)
@@ -72,6 +80,16 @@ func ParseObserved(body string) *Observed {
 			o.Running[f[1]] = f[2]
 		case "profile":
 			o.Profiles[f[1]] = f[2] == "on"
+		case "timer":
+			o.Timers[f[1]] = f[2]
+		case "path":
+			owner := "unknown"
+			if len(f) > 3 {
+				owner = f[3]
+			}
+			o.Paths[f[1]] = [2]string{f[2], owner}
+		case "firewall":
+			o.Firewalls[f[1]] = f[2]
 		}
 	}
 	return o
@@ -109,6 +127,9 @@ type Declared struct {
 	// Services the platform builds on its host (JCT7). Their running image is a
 	// local build with no registry digest, so there is no pin to compare it to.
 	Built map[string]bool
+
+	// What jcloud.yml's host: says the machine must be (JCT23).
+	Host Host
 }
 
 // standing answers the one question asked of everything declared: is it up, and is it
@@ -200,7 +221,8 @@ func SurveyAgainst(d Declared, o *Observed) []Divergence {
 		}
 	}
 
-	return append(out, strangers(is, o)...)
+	out = append(out, strangers(is, o)...)
+	return append(out, surveyHost(d.Host, o)...)
 }
 
 // DeclaredIn reads a checkout and says what should be running on a server deployed
@@ -240,6 +262,7 @@ func DeclaredIn(root string) (Declared, error) {
 	if err != nil {
 		return d, err
 	}
+	d.Host = prof.Host
 	found, err := prof.Services(root)
 	if err != nil {
 		return d, err

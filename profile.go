@@ -68,6 +68,10 @@ type Profile struct {
 	// what a person reads when writing the secret, so agree holds it to every
 	// key the manifests declare.
 	EnvExample string
+
+	// What the machine itself must be (JCT23, host.go): timers, path modes, a
+	// firewall. Empty on Japode's default, which asserts nothing about the host.
+	Host Host
 }
 
 // DefaultProfile is the Japode platform's layout, and what a root with no
@@ -99,14 +103,15 @@ type profileFile struct {
 		Path *string `yaml:"path"`
 		Kind *string `yaml:"kind"`
 	} `yaml:"route"`
-	ContainerPrefix *string `yaml:"container_prefix"`
-	ImageVar        *string `yaml:"image_var"`
-	PinFile         *string `yaml:"pin_file"`
-	Deploy          *string `yaml:"deploy"`
-	Addon           *string `yaml:"addon"`
-	Backup          *string `yaml:"backup"`
-	Builds          *bool   `yaml:"builds"`
-	EnvExample      *string `yaml:"env_example"`
+	ContainerPrefix *string   `yaml:"container_prefix"`
+	ImageVar        *string   `yaml:"image_var"`
+	PinFile         *string   `yaml:"pin_file"`
+	Deploy          *string   `yaml:"deploy"`
+	Addon           *string   `yaml:"addon"`
+	Backup          *string   `yaml:"backup"`
+	Builds          *bool     `yaml:"builds"`
+	EnvExample      *string   `yaml:"env_example"`
+	Host            *hostFile `yaml:"host"`
 }
 
 // routeKinds is every route grammar this build can read: Caddy through `caddy
@@ -160,6 +165,9 @@ func ParseProfile(data []byte) (*Profile, error) {
 	set(&p.EnvExample, f.EnvExample)
 	if f.Builds != nil {
 		p.Builds = *f.Builds
+	}
+	if f.Host != nil {
+		p.Host = Host{Timers: f.Host.Timers, Paths: f.Host.Paths, Firewall: f.Host.Firewall}
 	}
 
 	if problems := p.Validate(); len(problems) > 0 {
@@ -225,7 +233,7 @@ func (p *Profile) Validate() []string {
 	if relative("addon", p.Addon) && !strings.Contains(p.Addon, "{type}") {
 		bad("addon is %q and does not name {type}, so every need would read one provider", p.Addon)
 	}
-	return out
+	return append(out, p.Host.validate()...)
 }
 
 // ManifestPath is where one service's manifest sits, relative to the root.

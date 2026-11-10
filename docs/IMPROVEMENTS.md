@@ -57,24 +57,25 @@ that drops the fallback, or the platform's CI turns red on a model it never buil
 
 ### §JCT23 The host, declared in jcloud.yml
 
-`survey` holds the server to what the manifests declare, and a manifest declares only
-services. The timers, directory modes and firewall that JC2 found broken on Japode are
-asserted in `survey-server.sh`, in bash, against a list written there by hand. Viglet
-Cloud has its own timers — the nightly backup, the crawl, `configure-realm` every 15
-minutes — and no way to say so.
+`jcloud.yml`'s `host:` key shipped (host.go): timers that must be active, path modes and
+owners, a firewall, read by `observe` and compared by `survey`. What is left is the
+sentence that a manifest whose backup is declared implies its own timer, so the common
+case is written once.
 
-`jcloud.yml` gains a `host:` key: the timers that must be active, the paths whose mode
-is fixed, and whether a firewall must be enabled. A manifest whose backup is declared
-implies its own timer, so the common case is written once. `observe` reads exactly what
-`host:` names and `survey` compares it, with a finding per fact.
+It was not built because nothing in a manifest says a service runs a backup unit of its
+own. Viglet Cloud names `viglet-fesprojetos-backup` and `viglet-trabalharei-backup`, but
+Turing's data is copied by the stack-wide `viglet-postgres-backup`, and Japode has only
+stack-wide timers. Deriving one timer per manifest with a volume would report timers
+that were never meant to exist.
 
-Absent, nothing about the host is asserted: a platform opts in by declaring, never by
-inheriting Japode's list.
+Build it as `host.backup_timer: "<prefix>{name}-backup"`, applied only to the manifests
+that opt in. Which manifest field opts in is the choice still open: a new `backup: own`,
+or reading it off what Viglet's manifests say once C190 has written them. Decide against
+those manifests, not before.
 
-`observe` (JCT22, observe.go) already prints the service facts through an injectable
-command runner; the host facts are new kinds beside them, read with `systemctl`, `stat`
-and `ufw`. Only once they land can Japode's `survey-server.sh` shrink to `ssh … jcloud
-observe`, so that switch is this line's to name in the cloud repo, not JCT22's.
+Once this lands, Japode's `survey-server.sh` can shrink to `ssh … jcloud observe`, with
+its timers, mode and firewall moved into its `jcloud.yml`. That switch is filed in the
+cloud repo, not here.
 
 ### §JCT26 What changed since the last run
 
