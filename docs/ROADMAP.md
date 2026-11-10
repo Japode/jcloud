@@ -4,8 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-- 📋 **JCT30** (deps: —) **On Windows, agree names some missing files with backslashes and others with slashes in one report** — The Windows binary prints a path other than what the profile spells, so a script or annotation matching it differs by OS. → §JCT30
-
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on

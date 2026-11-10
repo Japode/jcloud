@@ -49,25 +49,6 @@ is passed through.
 The two repositories land in order: the platform script first, then the jcloud release
 that drops the fallback, or the platform's CI turns red on a model it never built.
 
-### §JCT30 Paths in a report, spelled one way
-
-Found running `go test ./...` on Windows while working JCT23. `TestAProfiledTreeAgrees`
-fails there and passes in `ci/check.sh`, which runs on Linux. Without a `jcloud.yml`,
-`agree` reports the missing compose file and route as
-`services\paste\docker-compose.yml` and `caddy\sites\paste.caddy`. Its backup.conf
-problem in the same report reads `services/paste/backup.conf`. The test looks for the
-slash spelling and misses the other two.
-
-The released Windows binary therefore prints one report in two spellings. A platform
-script that greps for a path, or a GitHub annotation carrying the `file=`, sees a
-different string depending on who ran it.
-
-The paths come from `Profile.ManifestPath`, `ServiceDir` and `RouteFile`, which return
-`filepath.FromSlash` so the file can be opened. Open with the native path and print the
-template's own slash form (`filepath.ToSlash`) in every problem and annotation. Then
-`TestAProfiledTreeAgrees` holds the spelling, and `go test ./...` passes on Windows as
-well as in the gate.
-
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on

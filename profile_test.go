@@ -174,11 +174,17 @@ func TestAProfiledTreeAgrees(t *testing.T) {
 	}
 
 	delete(files, "jcloud.yml")
-	p := strings.Join(m.AgreeWith(layTree(t, files), []byte(fixtureAdapted)), "\n")
+	root := layTree(t, files)
+	p := strings.Join(m.AgreeWith(root, []byte(fixtureAdapted)), "\n")
 	for _, want := range []string{"services/paste/docker-compose.yml", "caddy/sites/paste.caddy"} {
 		if !strings.Contains(p, want) {
 			t.Errorf("without jcloud.yml the Japode path %s should be the one reported, got:\n%s", want, p)
 		}
+	}
+	// JCT30: a file is named once, as the profile spells it, and the native
+	// absolute path the OS error carries is not repeated after it.
+	if strings.Contains(p, root) || strings.Contains(p, filepath.ToSlash(root)) {
+		t.Errorf("the report carries the checkout's absolute path:\n%s", p)
 	}
 }
 

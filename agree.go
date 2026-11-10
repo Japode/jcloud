@@ -24,7 +24,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -83,10 +85,19 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
+	// A file is named in the report as the profile spells it, with slashes, on every
+	// OS (JCT30): the Windows build printed the same report in two spellings, so a
+	// script or an annotation matching a path saw a different string by who ran it.
+	// The PathError's own path is the absolute native one and is dropped; its reason
+	// is what is left to say.
 	read := func(rel string) (string, bool) {
 		data, err := os.ReadFile(filepath.Join(root, rel))
 		if err != nil {
-			bad("%s: %v", rel, err)
+			var pe *fs.PathError
+			if errors.As(err, &pe) {
+				err = pe.Err
+			}
+			bad("%s: %v", filepath.ToSlash(rel), err)
 			return "", false
 		}
 		return string(data), true
