@@ -33,12 +33,29 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 )
 
-// Version is the tool's own, distinct from the schema's. Pinning it and asserting
-// it against what generated files claim is JC31; it is printed here so that a
-// report about a manifest says which build read it.
-const Version = "0.1.0"
+// version is the tool's own, distinct from the schema's, printed so that a report
+// about a manifest says which build read it (cloud's JC31).
+//
+// The tag is the version, so it is read from the build and not written here: a
+// literal is one more thing to bump per release, and it went stale the moment a tag
+// moved past it. GoReleaser sets it with -ldflags "-X main.version=…". Otherwise
+// `go install`/`go run module@vX` records the module version in the binary, and a
+// build from a checkout records the VCS pseudo-version or "(devel)".
+var version = ""
+
+// Version is what this build calls itself.
+func Version() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "(devel)"
+}
 
 func main() {
 	args := os.Args[1:]
@@ -103,7 +120,7 @@ func main() {
 		// other half of what determines this binary's behaviour, and a report about
 		// a manifest is only traceable if both are known (JC31). runtime.Version()
 		// is what actually built this, not what go.mod asked for.
-		fmt.Printf("jcloud %s (schema version %d, built with %s)\n", Version, SchemaVersion, runtime.Version())
+		fmt.Printf("jcloud %s (schema version %d, built with %s)\n", Version(), SchemaVersion, runtime.Version())
 	default:
 		fmt.Fprintf(os.Stderr, "jcloud: no such command %q\n\n", args[0])
 		usage()
@@ -147,7 +164,7 @@ caller who fixes one field and runs again has been sent round a loop this could
 have answered the first time.
 
 init and adopt are specified in docs/JCLOUD.md and not implemented.
-`, Version)
+`, Version())
 }
 
 // check parses its own flags rather than reaching for the flag package, which

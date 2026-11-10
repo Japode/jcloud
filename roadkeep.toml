@@ -1,4 +1,4 @@
-prefix = "JC"
+prefix = "JCT"
 
 # how a rationale section is addressed: "id" derives the pointer from the
 # task's own id, "outline" keeps a hand-numbered anchor

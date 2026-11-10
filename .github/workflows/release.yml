@@ -1,0 +1,42 @@
+name: release
+
+# A v* tag is a release: the module version `go install` and the platform resolve,
+# and, from this workflow, a GitHub Release with binaries and checksums.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # GoReleaser builds the changelog from the history since the previous tag.
+          fetch-depth: 0
+
+      # The same gate as every push, so a tag cannot publish what CI would refuse.
+      - name: gofmt, go vet, go test in the pinned toolchain
+        run: bash ci/check.sh
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # go.mod's `toolchain` line, the compiler ci/check.sh just asserted, forced
+      # exactly. GOTOOLCHAIN=auto only ever upgrades, so a newer Go on the runner
+      # would build the release with a compiler nothing here tested.
+      - name: Pin the toolchain go.mod names
+        run: echo "GOTOOLCHAIN=$(sed -n 's/^toolchain //p' go.mod)" >> "$GITHUB_ENV"
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

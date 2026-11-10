@@ -25,13 +25,26 @@ Exit codes: `0` everything checked passed, `1` something was refused, `2` the ar
 were wrong. Problems are reported all at once, and inside GitHub Actions each one is also
 printed as an `::error file=…::` annotation.
 
-## Running it
+## Installing it
 
-The platform runs it by version, in a Go image pinned by digest:
+Each `v*` tag is a release. Pick one of three ways to run it:
 
-```sh
-go run github.com/Japode/jcloud@v0.1.0 check japode.yml
-```
+- **A binary**: download the archive for your platform from
+  [Releases](https://github.com/Japode/jcloud/releases), check it against `checksums.txt`,
+  and put `jcloud` on your `PATH`. Linux, macOS and Windows, amd64 and arm64.
+- **With Go**: `go install github.com/Japode/jcloud@latest`, or a fixed version with
+  `go run github.com/Japode/jcloud@v0.2.0 check japode.yml`.
+- **What the platform does**: it pins the tag and builds it inside a Go image pinned by
+  digest, so nothing is installed on the host.
+
+`jcloud version` prints the release, the schema version and the compiler that built it.
+
+## Releasing
+
+Push a `v*` tag. `.github/workflows/release.yml` runs `ci/check.sh`, then GoReleaser
+(`.goreleaser.yaml`) builds with the compiler `go.mod` pins and publishes the archives and
+`checksums.txt` to a GitHub Release. The version comes from the tag; there is no constant to
+bump. `.goreleaser.yaml` has the command for a local snapshot build that publishes nothing.
 
 ## Developing
 

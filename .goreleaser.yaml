@@ -1,0 +1,52 @@
+# One GitHub Release per v* tag, with an archive per platform and a checksums file.
+# Run by .github/workflows/release.yml. Locally, without publishing anything:
+#
+#   docker run --rm -v "$PWD:/src" -w /src -e GOTOOLCHAIN="$(sed -n 's/^toolchain //p' go.mod)" \
+#     goreleaser/goreleaser:v2.20.0 release --snapshot --clean
+#
+# GOTOOLCHAIN is the compiler go.mod pins, forced: the image's own Go is newer, and
+# `auto` would build with it.
+#
+# The binaries are for a person without Go or Docker. The platform repository does not
+# use them: it pins the module tag and builds it inside its own pinned toolchain.
+version: 2
+
+project_name: jcloud
+
+builds:
+  - id: jcloud
+    main: .
+    binary: jcloud
+    env:
+      # Static binaries: the server has docker and bash and no libc promises.
+      - CGO_ENABLED=0
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    # main.version, read by `jcloud version`. Without it the binary would report
+    # "(devel)", because a build from a checkout records no module version.
+    ldflags: ["-s -w -X main.version={{ .Tag }}"]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [README.md]
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude: ["^docs", "^chore\\(roadkeep\\)"]
+
+release:
+  github:
+    owner: Japode
+    name: jcloud
