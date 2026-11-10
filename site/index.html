@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/svg+xml" href="/jcloud/favicon.svg" />
+    <link rel="apple-touch-icon" href="/jcloud/apple-touch-icon.png" />
 
     <!--
       The theme follows the OS, and a stored choice wins over it. The design system's
@@ -19,9 +20,10 @@
     <!--hreflang-->
 
     <!--
-      scripts/prerender.mjs patches the title, description and canonical by replace-or-throw,
-      inlines the rendered body into the root element, and per language sets the html lang and
-      replaces the hreflang anchor above with the alternate links. No closing head or script
+      scripts/prerender.mjs patches the title, description, canonical and the og tags by
+      replace-or-throw, inlines the rendered body into the root element, and per language sets
+      the html lang, replaces the hreflang anchor above with the alternate links and adds the
+      JSON-LD. No closing head or script
       token may appear in a comment here.
     -->
   </head>

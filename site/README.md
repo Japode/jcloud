@@ -26,8 +26,14 @@ version that does not exist. The CI step on the page was run as written, against
 release, before it was put there: if GoReleaser's archive names change, run it again.
 
 `npm run build` is the gate. The prerender writes each language's page with its own title,
-description, canonical, `<html lang>` and hreflang links, by replace-or-throw, so a template
-that lost an anchor fails the build.
+description, canonical, og tags, `<html lang>`, hreflang links and JSON-LD (a
+`SoftwareApplication` naming the release the build found), by replace-or-throw, so a template
+that lost an anchor fails the build. It also rasterises `og.png`, the 1200 x 630 social card
+in the cool tone, and `apple-touch-icon.png` from `public/icon.svg`; resvg needs a font on
+disk, which is why `site.yml` installs `fonts-dejavu-core`.
+
+The nav carries a "part of Japode" chip and the footer a "More from Japode" link, both to
+`/`, the storefront at the root of japode.com, as on Revelei's site.
 
 ## Where things live
 
@@ -41,7 +47,7 @@ that lost an anchor fails the build.
 | `demo/` | The scenarios, one per verb, all about one generic service called `notes`: `hero/` and `check/` (a manifest), `repo/` (a service repository whose Dockerfile moved the port), `platform/` (the files a platform deploys beside it), `compare/`, `survey/` and `env/` |
 | `public/icon.svg` | The mark: two sheets that have to agree, and the check |
 | `public/favicon.svg` | The mark at tab size, the check alone |
-| `scripts/prerender.mjs` | The prerender, and the per-language `<html lang>` and hreflang |
+| `scripts/prerender.mjs` | The prerender, `og.png`, `apple-touch-icon.png`, and the per-language `<html lang>`, hreflang and JSON-LD |
 
 ## Terminal output is never typed
 

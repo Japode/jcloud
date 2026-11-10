@@ -1,5 +1,5 @@
 import { SiteButton, SiteFooter, SiteNav, SiteThemeToggle } from "@viglet/viglet-design-system/site";
-import { asset, languages, pageHref, releasesUrl, repoUrl, THEME_KEY, words, type Lang } from "../content";
+import { asset, familyHref, familyName, languages, pageHref, releasesUrl, repoUrl, THEME_KEY, words, type Lang } from "../content";
 import { useLang, useWords } from "../i18n";
 
 // The nav and the footer, drawn by the design system's site layer so jcloud sits in the same
@@ -14,6 +14,8 @@ export function Nav() {
   return (
     <SiteNav
       brand={{ href: pageHref(lang), name: "jcloud", logo: asset("icon.svg") }}
+      // The family chip: the way back to the Japode storefront (JCT15).
+      parent={{ href: familyHref, name: familyName, pre: w.family.pre, title: w.family.title }}
       actions={
         <>
           <SiteButton href={releasesUrl} rel="noopener">

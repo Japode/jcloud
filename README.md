@@ -5,6 +5,9 @@ to agree with it: the service's own Dockerfile, Caddyfile and workflows, and the
 file, route, `backup.conf` and `.env.example` the platform deploys beside it. It does not
 render or deploy anything, and only `env` writes a file.
 
+The product page, with a real run of every verb, is at https://japode.com/jcloud/ (built
+from [`site/`](site/README.md)).
+
 ```
 jcloud check <japode.yml> …                     validate a manifest
 jcloud check --repo <root> [--repository o/n]   …and compare it against the service's

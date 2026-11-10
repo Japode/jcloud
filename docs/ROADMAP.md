@@ -16,8 +16,6 @@
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-- 📋 **JCT15** (deps: JCT11 ✅, JCT14 ✅) **The page declares no canonical, social card or link to Japode, so search and shares lose it** — A page that search engines cannot attribute and a link that unfurls blank are the two ways a product page goes unread. → §JCT15
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and

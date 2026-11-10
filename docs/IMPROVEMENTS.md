@@ -167,14 +167,3 @@ repository's work, filed in its own roadmap; this line is the half that keeps it
 after every jcloud change.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
-
-### §JCT15 JCT15 — discoverability and the Japode family
-
-A page nobody can find or share is half a page. Following Revelei (PB49, PB50):
-canonical, og:url, hreflang, sitemap and robots.txt name https://japode.com/jcloud/; the
-prerender rasterises `og.png` and the touch icon; JSON-LD declares a SoftwareApplication
-with the release as its download; the nav carries a "part of Japode" chip to the
-storefront and the footer a "More from Japode" link.
-
-The README and the GitHub repository's website field point at the page, so the two ways
-in lead to each other.

@@ -12,6 +12,11 @@ export const repoUrl = "https://github.com/Japode/jcloud";
 
 export const asset = (path: string) => `${BASE}${path}`;
 
+// The Japode storefront, at the root of the origin this page is served from (japode.com), so
+// the link works on the custom domain without naming it twice. As on Revelei's site (PB49).
+export const familyHref = "/";
+export const familyName = "Japode";
+
 export type Lang = "en" | "pt";
 
 /** Each language's route, its <html lang>, and how the other language names it. */
@@ -89,6 +94,7 @@ export type VerbId = (typeof verbIds)[number];
 type Words = {
   meta: { title: string; description: string };
   nav: { cta: string; repo: string; themeLabel: (next: string) => string };
+  family: { pre: string; title: string };
   hero: {
     eyebrow: string;
     title: string;
@@ -141,6 +147,7 @@ export const words: Record<Lang, Words> = {
       repo: "GitHub",
       themeLabel: (next) => `Switch to ${next} theme`,
     },
+    family: { pre: "part of", title: "Japode: small software that does one job" },
     hero: {
       eyebrow: "jcloud · for Japode Cloud services",
       title: "One manifest.",
@@ -256,8 +263,9 @@ export const words: Record<Lang, Words> = {
       links: [
         { href: repoUrl, label: "Source" },
         { href: `${repoUrl}/releases`, label: "Releases" },
+        { href: familyHref, label: "More from Japode" },
       ],
-      disclaimer: "jcloud is open source. It reads files and reports; only the env verb writes one.",
+      disclaimer: "jcloud is a Japode product and open source. It reads files and reports; only the env verb writes one.",
     },
   },
   pt: {
@@ -271,6 +279,7 @@ export const words: Record<Lang, Words> = {
       repo: "GitHub",
       themeLabel: (next) => `Mudar para o tema ${next === "dark" ? "escuro" : "claro"}`,
     },
+    family: { pre: "parte da", title: "Japode: softwares pequenos que fazem uma coisa bem" },
     hero: {
       eyebrow: "jcloud · para os serviços da Japode Cloud",
       title: "Um manifesto.",
@@ -386,8 +395,9 @@ export const words: Record<Lang, Words> = {
       links: [
         { href: repoUrl, label: "Código" },
         { href: `${repoUrl}/releases`, label: "Versões" },
+        { href: familyHref, label: "Mais da Japode" },
       ],
-      disclaimer: "O jcloud é open source. Ele lê arquivos e informa; só o comando env grava um.",
+      disclaimer: "O jcloud é um produto Japode e open source. Ele lê arquivos e informa; só o comando env grava um.",
     },
   },
 };
