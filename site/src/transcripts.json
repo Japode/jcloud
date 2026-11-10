@@ -1,5 +1,5 @@
 {
-  "version": "jcloud v0.2.0-24-g67df02c (schema version 1, built with go1.26.8)",
+  "version": "jcloud v0.3.0 (schema version 1, built with go1.26.8)",
   "runs": {
     "hero": {
       "cwd": "demo/hero",
