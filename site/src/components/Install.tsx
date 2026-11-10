@@ -1,6 +1,7 @@
 import { SiteButton, SiteCopyButton } from "@viglet/viglet-design-system/site";
 import { install, releasesUrl, tag } from "../content";
 import { useWords } from "../i18n";
+import { Yaml } from "./Yaml";
 
 // The call to action: the three ways to install the release the build found in git, and the
 // GitHub Actions step that is jcloud's main home. Every command names that one release, so
@@ -48,7 +49,9 @@ export function Install() {
                   <span>{w.ci.file}</span>
                   <SiteCopyButton text={install.ci} label={w.copy.label(w.ci.file)} copyLabel={w.copy.copy} copiedLabel={w.copy.copied} />
                 </p>
-                <pre className="code">{install.ci}</pre>
+                <pre className="code">
+                  <Yaml code={install.ci} />
+                </pre>
               </div>
             </div>
           </article>

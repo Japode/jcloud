@@ -17,6 +17,15 @@
   --term-ok: #4ade80;
   --term-err: #f87171;
   --term-key: #fdba74;
+  /* YAML, on the same dark ground: keys in the brand's light orange, values readable, and
+     what GitHub or the shell will substitute set apart from what is literal. */
+  --y-key: #fdba74;
+  --y-str: #a5d6a7;
+  --y-num: #f9a8d4;
+  --y-expr: #93c5fd;
+  --y-var: #c4b5fd;
+  --y-punct: #8b93a3;
+  --y-comment: #6b7280;
   --wrap: 1180px;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
@@ -194,6 +203,29 @@
 }
 .term .t-prompt {
   color: var(--term-text);
+}
+.y-key {
+  color: var(--y-key);
+}
+.y-str {
+  color: var(--y-str);
+}
+.y-num {
+  color: var(--y-num);
+}
+.y-expr {
+  color: var(--y-expr);
+}
+.y-var {
+  color: var(--y-var);
+}
+.y-dash,
+.y-punct {
+  color: var(--y-punct);
+}
+.y-comment {
+  color: var(--y-comment);
+  font-style: italic;
 }
 .term .t-dollar {
   color: var(--term-key);

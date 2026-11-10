@@ -2,6 +2,7 @@ import { SiteButton } from "@viglet/viglet-design-system/site";
 import { heroManifest, releasesUrl, repoUrl, transcripts } from "../content";
 import { useWords } from "../i18n";
 import { Terminal } from "./Terminal";
+import { Yaml } from "./Yaml";
 
 // The opening says what jcloud is in one sentence and then shows it: a manifest, the command,
 // and what jcloud printed for it, captured from a release (src/transcripts.json).
@@ -42,7 +43,9 @@ export function Hero() {
               <p className="pane-label">
                 <span>{hero.manifestLabel}</span>
               </p>
-              <pre className="code">{heroManifest.join("\n")}</pre>
+              <pre className="code">
+                <Yaml code={heroManifest.join("\n")} />
+              </pre>
             </div>
             <Terminal run={transcripts.runs.hero} label={hero.terminalLabel} />
           </div>
