@@ -34,3 +34,4 @@
 
 ## Block E — Watching the server: jcloud reads the running machine on its own
 
+- ✅ **JCT22** **Only Japode's survey-server.sh gathers observations, so another platform has no collector and must write its own** — jcloud observe runs on the host and prints the container, running, pinned and profile lines survey reads, so a platform needs no collector of its own (design recorded in `observe.go`).

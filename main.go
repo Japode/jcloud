@@ -113,9 +113,13 @@ func main() {
 		os.Exit(compareManifests(rest[0], rest[1]))
 	case "survey":
 		// Takes the observations as a file and reaches no network, the division
-		// JC29 already made for `compare` — scripts/survey-server.sh holds the SSH
-		// credential and does the reading.
+		// JC29 already made for `compare`. `jcloud observe` gathers it on the host,
+		// and the platform's transport, which holds the credential, carries it here.
 		os.Exit(survey(args[1:]))
+	case "observe":
+		// The collector survey reads, run on the host (JCT22). It asks the local
+		// docker and reaches no network: the transport stays the platform's.
+		os.Exit(observe(args[1:]))
 	case "up":
 		// Reports and brings nothing up. `--published` is what makes the digest
 		// resolved rather than pasted, and it is a file for `survey`'s reason: the
@@ -162,9 +166,12 @@ func usage() {
                                        service's own compose file is read
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
-  jcloud survey [--root <dir>]         the server, as scripts/survey-server.sh
-       <observations>                  observed it, against what services/*/
-                                       declares. Reads a file, not a host.
+  jcloud survey [--root <dir>]         the server, as jcloud observe saw it,
+       <observations>                  against what the manifests declare.
+                                       Reads a file, not a host.
+  jcloud observe [--root <dir>]        run on the host, in the deployed tree:
+                                       print what survey reads, from the local
+                                       docker and the deploy's pin file
   jcloud up [<service> …]              what stands between each service and a
        [--root <dir>] [--env <path>]   deploy: the variables its manifest
        [--state <path>]                declares and the configuration lacks, and

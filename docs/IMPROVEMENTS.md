@@ -71,6 +71,11 @@ implies its own timer, so the common case is written once. `observe` reads exact
 Absent, nothing about the host is asserted: a platform opts in by declaring, never by
 inheriting Japode's list.
 
+`observe` (JCT22, observe.go) already prints the service facts through an injectable
+command runner; the host facts are new kinds beside them, read with `systemctl`, `stat`
+and `ufw`. Only once they land can Japode's `survey-server.sh` shrink to `ssh … jcloud
+observe`, so that switch is this line's to name in the cloud repo, not JCT22's.
+
 ### §JCT26 What changed since the last run
 
 Run twice, `survey` prints the same report whether the drift is a year old or an hour
@@ -96,23 +101,6 @@ subject it is about, and with `--since` its state: new, standing or gone. The co
 subject together are the alert's key, so rewording the prose touches nothing.
 
 The prose form stays the default and stays what a person reads in CI.
-
-### §JCT22 One collector, shipped with jcloud
-
-Today the observations come from Japode's `scripts/survey-server.sh`, a bash collector
-that knows Japode's timers, its `docker-lib.sh` and its container prefix. jcloud ships
-no collector, so a second platform adopting `survey` has to write its own, and every fix
-to one never reaches the other.
-
-`jcloud observe [--root <dir>]` runs on the host and prints the `<kind> <name> <value>`
-lines `survey` already reads: `container`, `running`, `pinned`, `profile`, and the host
-facts JCT23 makes declarable. It reads only the machine it runs on, through the `docker`
-and `systemctl` it finds on PATH, so JC29's division holds: jcloud still reaches no
-network, and the transport — SSH, a self-hosted runner, a local timer — stays the
-platform's, which is where the credential is.
-
-Japode's collector then shrinks to `ssh "$SURVEY_HOST" jcloud observe > obs`, and its
-`--repair` stays where JC96 put it. Refused: a jcloud that dials the host itself.
 
 ### §JCT24 A backup that is recent, not a timer that exists
 

@@ -23,6 +23,8 @@ jcloud agree [--routes <file>] <root> <yml> …    …and compare it against the
 jcloud compare <ours.yml> <theirs.yml>          where two copies of a manifest disagree
 jcloud survey [--root <dir>] <observations>     the server as observed, against what
                                                 services/*/ declares
+jcloud observe [--root <dir>]                   run on the host: print what survey
+                                                reads, from the local docker
 jcloud up [<service> …] [--root <dir>] …        what stands between a service and a deploy
 jcloud env <verb> …                             the age-encrypted .env.age: list, get,
                                                 set, unset, render
@@ -64,6 +66,13 @@ default and on `secret`.
 
 jcloud refuses a misspelt key or a path outside the root rather than falling back to the
 default. It reads this file and never generates one.
+
+`observe` runs on the server, in the deployed tree, and reads the same file. It asks the
+local `docker` which containers are up (stripping `container_prefix`), how each one stands
+and which digest it runs, reads each service's pin from `pin_file`, and reports each
+profile a manifest declares as `on` when `COMPOSE_PROFILES` names it or one of its
+services is up. It reaches no network. Getting its output to `survey` is the platform's
+job, for example `ssh host 'cd /srv/platform && jcloud observe' > observed.txt`.
 
 With `kind: nginx`, `agree --routes` takes the output of `nginx -T`. Each manifest route
 is the `server` whose `server_name` lists its hosts, and within it `location /`. jcloud

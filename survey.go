@@ -10,8 +10,9 @@
 // installed and never enabled, and three systemd timers that had never been installed
 // at all, leaving 26 days of three services serving with no copy of anything taken.
 //
-// **This file reaches no network.** The observations arrive as a file, gathered by
-// scripts/survey-server.sh, which is the same division `compare` already makes: it
+// **This file reaches no network.** The observations arrive as a file, printed on the
+// host by `jcloud observe` (observe.go, JCT22) and carried here by the platform's
+// own transport, which is the same division `compare` already makes: it
 // takes two paths rather than a repository, because the fetching belongs in the script
 // that holds the credential (JC29). It also means every assertion here is testable
 // without a server, which is the half of this that has to keep working.
@@ -312,7 +313,7 @@ func survey(args []string) int {
 		}
 	}
 	if observations == "" {
-		fmt.Fprintln(os.Stderr, "jcloud survey [--root <dir>] <observations>\n\nThe observations are gathered by scripts/survey-server.sh, which is what holds the\nSSH credential — this build reaches no network (JC96).")
+		fmt.Fprintln(os.Stderr, "jcloud survey [--root <dir>] <observations>\n\nThe observations are what `jcloud observe` prints on the host, carried here by\nwhatever holds the credential to reach it — this command reaches no network (JC96).")
 		return 2
 	}
 
