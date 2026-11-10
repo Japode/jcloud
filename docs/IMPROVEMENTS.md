@@ -4,25 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT4 Comparing against the resolved compose model
-
-agreeCompose reads `services/<name>/docker-compose.yml` as text and asserts substrings:
-`${<NAME>_IMAGE`, `container_name: japode-<name>`, the healthcheck words. Against a file
-holding every service, a substring matches a neighbour's block. The resolved model is
-what to compare: `docker compose config --format json` with every profile enabled,
-written by the platform script the way caddy adapt is today, gives each service its
-image, build, environment, volumes, healthcheck, depends_on and profiles after
-interpolation. jcloud reads that JSON and looks the service up by name. The profile from
-JCT2 says which compose files make up the model and whether a service directory is
-required.
-
-This also closes a weakness Japode has now: a substring assertion passes on a
-commented-out line. Japode keeps its per-directory layout and passes the same model, so
-one code path serves both.
-
-A manifest may declare `profile:`, so a service outside the default profile is checked
-as one, and `survey` does not report it missing where that profile is off on the server.
-
 ### §JCT5 Shared needs
 
 A need today resolves to `<service>-<need>`, a container the service owns with its own
@@ -142,6 +123,25 @@ declared gate the route does not run is a new one: the route is open to anyone.
 
 Which upstream answers the subrequest is not in the field. It is another route's
 business, and one that route's own manifest states.
+
+### §JCT19 One compose path: the model
+
+Since JCT4, `agree --compose` reads the model `docker compose --profile '*' config
+--no-interpolate --format json` prints, and without it falls back to agreeCompose and
+agreeNeeds over services/<name>/docker-compose.yml as text (compose_model.go). The
+Japode platform's scripts/check-jcloud.sh passes only `--adapted`, so its services still
+go through the substring path, which passes on a commented-out line.
+
+Measured on 2026-11-10: the model built from the top-level docker-compose.yml plus every
+services/*/docker-compose.yml, joined with `-f` the way scripts/deploy.sh joins them,
+agrees for all three Japode services and both their databases. So the change is in the
+platform's script: build that model beside caddy-adapt.json and pass it with
+`--compose`. jcloud then reports an absent model the way it reports absent routes ("not
+supplied, so unchecked"), and the textual compose and needs checks are deleted, leaving
+one code path.
+
+The two repositories land in order: the platform script first, then the jcloud release
+that drops the fallback, or the platform's CI turns red on a model it never built.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

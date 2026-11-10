@@ -47,6 +47,7 @@ type Observed struct {
 	Containers map[string]string // name -> status word, e.g. "healthy"
 	Pinned     map[string]string // service -> digest in .deploy-state/images.env
 	Running    map[string]string // service -> digest the container is actually on
+	Profiles   map[string]bool   // compose profile -> switched on (JCT4)
 }
 
 func ParseObserved(body string) *Observed {
@@ -54,6 +55,7 @@ func ParseObserved(body string) *Observed {
 		Containers: map[string]string{},
 		Pinned:     map[string]string{},
 		Running:    map[string]string{},
+		Profiles:   map[string]bool{},
 	}
 	for _, line := range strings.Split(body, "\n") {
 		f := strings.Fields(line)
@@ -67,6 +69,8 @@ func ParseObserved(body string) *Observed {
 			o.Pinned[f[1]] = f[2]
 		case "running":
 			o.Running[f[1]] = f[2]
+		case "profile":
+			o.Profiles[f[1]] = f[2] == "on"
 		}
 	}
 	return o
@@ -95,6 +99,11 @@ type Divergence struct {
 type Declared struct {
 	Services []string
 	Others   []string
+
+	// The compose profile a service runs under, for the services whose manifest
+	// declares one (JCT4). Such a service is opt-in: absent from a server where the
+	// collector did not report its profile on is the profile being off, not drift.
+	Profile map[string]string
 }
 
 // standing answers the one question asked of everything declared: is it up, and is it
@@ -152,6 +161,11 @@ func SurveyAgainst(d Declared, o *Observed) []Divergence {
 	}
 
 	for _, service := range d.Services {
+		if _, up := o.Containers[service]; !up {
+			if p := d.Profile[service]; p != "" && !o.Profiles[p] {
+				continue
+			}
+		}
 		if bad := standing(service, o); bad != nil {
 			out = append(out, *bad)
 			// Absent is the end of what can be said about it: a digest comparison
@@ -240,6 +254,12 @@ func DeclaredIn(root string) (Declared, error) {
 		}
 		for _, need := range m.Needs {
 			d.Others = append(d.Others, service+"-"+need.Name)
+		}
+		if m.Profile != "" {
+			if d.Profile == nil {
+				d.Profile = map[string]string{}
+			}
+			d.Profile[service] = m.Profile
 		}
 	}
 

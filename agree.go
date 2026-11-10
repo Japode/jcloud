@@ -48,15 +48,30 @@ func (m *Manifest) Agree(root string) []string {
 // (profile.go); a root without one is read with the Japode layout. A profile that
 // cannot be read is the one answer, because every path below would come from it.
 func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
+	return m.AgreeFrom(root, AgreeInputs{Routes: adaptedConfig})
+}
+
+// AgreeInputs is what the platform's script produced with the edge's and
+// compose's own tools: the route configuration (`caddy adapt` JSON or `nginx -T`)
+// and the resolved compose model (compose_model.go). Each is optional, and an
+// absent one is said rather than assumed.
+type AgreeInputs struct {
+	Routes  []byte
+	Compose []byte
+}
+
+// AgreeFrom is AgreeWith with every input the platform's script produced.
+func (m *Manifest) AgreeFrom(root string, in AgreeInputs) []string {
 	prof, err := LoadProfile(root)
 	if err != nil {
 		return []string{err.Error()}
 	}
-	return m.AgreeIn(root, prof, adaptedConfig)
+	return m.AgreeIn(root, prof, in)
 }
 
-// AgreeIn is AgreeWith with the platform's profile already read.
-func (m *Manifest) AgreeIn(root string, prof *Profile, adaptedConfig []byte) []string {
+// AgreeIn is AgreeFrom with the platform's profile already read.
+func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) []string {
+	adaptedConfig := in.Routes
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -76,8 +91,17 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, adaptedConfig []byte) []s
 	needs, problems := m.resolveNeeds(root, prof)
 	p = append(p, problems...)
 
+	// The resolved model when the platform supplied one, and the per-service
+	// file's text otherwise (compose_model.go says why the first is the one to
+	// want, JCT4).
 	svcDir := prof.ServiceDir(m.Name)
-	if compose, ok := read(filepath.Join(svcDir, "docker-compose.yml")); ok {
+	if len(in.Compose) > 0 {
+		if model, err := parseComposeModel(in.Compose); err != nil {
+			bad("compose: %v", err)
+		} else {
+			p = append(p, m.agreeComposeModel(model, needs, prof)...)
+		}
+	} else if compose, ok := read(filepath.Join(svcDir, "docker-compose.yml")); ok {
 		at := filepath.ToSlash(filepath.Join(svcDir, "docker-compose.yml"))
 		p = append(p, m.agreeCompose(at, compose, prof)...)
 		p = append(p, m.agreeNeeds(at, compose, needs, prof)...)

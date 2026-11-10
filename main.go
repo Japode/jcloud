@@ -2,7 +2,8 @@
 //
 //	jcloud check [--repo <root> [--repository <owner/name>]
 //	             [--dockerfile <path>] [--caddyfile <path>]] <japode.yml> …
-//	jcloud agree [--routes <caddy-adapt.json | nginx-T.txt>] <root> <japode.yml> …
+//	jcloud agree [--routes <caddy-adapt.json | nginx-T.txt>] [--compose <config.json>]
+//	             <root> <japode.yml> …
 //	jcloud compare <ours.yml> <theirs.yml>
 //	jcloud env <verb> …
 //
@@ -76,20 +77,30 @@ func main() {
 		// compared against are found from the root — and a service adopted from
 		// another repository will not have the two in the same place.
 		rest := args[1:]
-		adapted := ""
-		if len(rest) >= 2 && (rest[0] == "--routes" || rest[0] == "--adapted") {
-			// A file and not a command to run: this build shells out to nothing,
-			// and `caddy adapt` or `nginx -T` belongs to the script that already
-			// has a pinned image of the edge. route_json.go says why it is read at
-			// all. --adapted is the spelling from before nginx (JCT3), kept so a
-			// platform script written against it still runs.
-			adapted, rest = rest[1], rest[2:]
+		adapted, compose := "", ""
+	agreeFlags:
+		for len(rest) >= 2 {
+			switch rest[0] {
+			// Files and not commands to run: this build shells out to nothing, and
+			// `caddy adapt`, `nginx -T` and `docker compose config` belong to the
+			// script that already has pinned images of them. route_json.go and
+			// compose_model.go say why each is read at all. --adapted is the
+			// spelling from before nginx (JCT3), kept so a platform script
+			// written against it still runs.
+			case "--routes", "--adapted":
+				adapted = rest[1]
+			case "--compose":
+				compose = rest[1]
+			default:
+				break agreeFlags
+			}
+			rest = rest[2:]
 		}
 		if len(rest) < 2 {
-			fmt.Fprintln(os.Stderr, "jcloud agree [--routes <caddy-adapt.json | nginx-T.txt>] <repository-root> <japode.yml> …")
+			fmt.Fprintln(os.Stderr, "jcloud agree [--routes <caddy-adapt.json | nginx-T.txt>] [--compose <compose-config.json>] <repository-root> <japode.yml> …")
 			os.Exit(2)
 		}
-		os.Exit(agree(rest[1:], rest[0], adapted))
+		os.Exit(agree(rest[1:], rest[0], adapted, compose))
 	case "compare":
 		// Two paths and no fetching: the copy in the service's repository arrives
 		// as a file somebody else read, which is what keeps the network out of
@@ -145,7 +156,10 @@ func usage() {
                                        .env.example deployed beside it. The
                                        route is read from --routes: caddy adapt
                                        JSON, or nginx -T when jcloud.yml says
-                                       route.kind: nginx
+                                       route.kind: nginx. --compose takes
+       [--compose <path>]              docker compose config --no-interpolate
+                                       --format json, and without it the
+                                       service's own compose file is read
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
   jcloud survey [--root <dir>]         the server, as scripts/survey-server.sh
@@ -225,16 +239,23 @@ flags:
 }
 
 // agree reads the adapted configuration, if one was named, and hands it on.
-func agree(paths []string, root, adaptedPath string) int {
-	var adaptedConfig []byte
-	if adaptedPath != "" {
-		var err error
-		if adaptedConfig, err = os.ReadFile(adaptedPath); err != nil {
+func agree(paths []string, root, adaptedPath, composePath string) int {
+	var in AgreeInputs
+	for _, f := range []struct {
+		path string
+		into *[]byte
+	}{{adaptedPath, &in.Routes}, {composePath, &in.Compose}} {
+		if f.path == "" {
+			continue
+		}
+		data, err := os.ReadFile(f.path)
+		if err != nil {
 			fmt.Fprintf(os.Stderr, "jcloud agree: %v\n", err)
 			return 2
 		}
+		*f.into = data
 	}
-	return run(paths, func(m *Manifest) []string { return m.AgreeWith(root, adaptedConfig) },
+	return run(paths, func(m *Manifest) []string { return m.AgreeFrom(root, in) },
 		"agrees with the files deployed beside it", "agree with the files deployed beside them")
 }
 

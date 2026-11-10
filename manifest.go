@@ -45,6 +45,13 @@ type Manifest struct {
 	// version 1 and refused when non-empty until JC32, which is what resolves one:
 	// each entry names a type, and addons/<type>/addon.yml is the provider.
 	Needs []Need `yaml:"needs"`
+
+	// The compose profile the service runs under, when it is not the default one
+	// (JCT4). A platform that declares every service in one compose file keeps the
+	// opt-in ones apart this way, and both the model check and `survey` read it:
+	// the first holds the compose file to it, the second does not report a service
+	// missing whose profile was never switched on.
+	Profile string `yaml:"profile"`
 }
 
 type Health struct {
@@ -379,8 +386,16 @@ func (m *Manifest) validateNeeds() []string {
 			bad("%s.type: %q is not a short name", at, n.Type)
 		}
 	}
+
+	// Compose's own grammar for a profile name, so a name compose would refuse is
+	// refused here first.
+	if m.Profile != "" && !profileRE.MatchString(m.Profile) {
+		bad("profile: %q is not a compose profile name", m.Profile)
+	}
 	return p
 }
+
+var profileRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`)
 
 func (m *Manifest) validateEnv() []string {
 	var p []string

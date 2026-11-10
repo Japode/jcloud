@@ -15,7 +15,11 @@ jcloud check --repo <root> [--repository o/n]   …and compare it against the se
 jcloud agree [--routes <file>] <root> <yml> …    …and compare it against the platform
                                                 files deployed beside it; the route
                                                 is read from `caddy adapt` JSON or
-                                                `nginx -T` output
+                                                `nginx -T` output; --compose <file>
+                                                takes `docker compose --profile '*'
+                                                config --no-interpolate --format
+                                                json` in place of each service's
+                                                own compose file
 jcloud compare <ours.yml> <theirs.yml>          where two copies of a manifest disagree
 jcloud survey [--root <dir>] <observations>     the server as observed, against what
                                                 services/*/ declares
