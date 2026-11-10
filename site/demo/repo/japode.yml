@@ -1,0 +1,32 @@
+# The service repository, where somebody moved the port to 3000 in the Dockerfile and
+# left the manifest at 8080. `jcloud check --repo . japode.yml` is what CI runs here.
+version: 1
+
+name: notes
+image: ghcr.io/example/notes
+
+port: 8080
+
+health:
+  path: /healthz
+  probe: curl
+  start_period: 10s
+
+volumes:
+  - name: data
+    path: /data
+    sqlite: [notes.db]
+
+routes:
+  - hosts: [notes.example.com]
+    max_body: 2MB
+
+env:
+  - name: PUBLIC_URL
+    default: https://notes.example.com
+    doc: The address the application puts in its links.
+  - name: SESSION_SECRET
+    secret: true
+    doc: Signs the session cookie. Set in the platform's secrets only.
+
+needs: []

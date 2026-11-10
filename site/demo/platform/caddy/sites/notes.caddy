@@ -1,0 +1,16 @@
+{$NOTES_HOSTS:notes.example.com} {
+	encode zstd gzip
+
+	request_body {
+		max_size 2MB
+	}
+
+	reverse_proxy notes:3000 {
+		health_uri /healthz
+		health_interval 15s
+	}
+
+	log {
+		output file /data/log/notes-access.log
+	}
+}

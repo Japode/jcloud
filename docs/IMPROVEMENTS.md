@@ -168,22 +168,6 @@ after every jcloud change.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-### §JCT12 JCT12 — what each verb catches, in real output
-
-The reader has to see what jcloud catches before reading how. Revelei opens on real
-before and after images made by the app; jcloud's equivalent is real terminal output.
-
-Show each verb (check, agree, compare, survey, up, env) with one manifest fragment and
-the exact output jcloud prints for it, including a refusal with its `::error file=`
-annotation and exit code 1. The transcripts are captured by running a released jcloud
-against a fixture tree, by a script in `site/scripts/`, and committed with the release
-they came from, never typed by hand: copy that drifts from the binary is the drift
-jcloud exists to stop.
-
-Then the shape of the platform: manifest in the service repo, compose file, route,
-backup.conf and .env.example in the platform, jcloud between them. One diagram, both
-themes.
-
 ### §JCT13 JCT13 — install and the CI step
 
 The README's three ways to install (a release archive, `go install`, the pinned build

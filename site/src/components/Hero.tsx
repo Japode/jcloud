@@ -1,10 +1,10 @@
 import { SiteButton } from "@viglet/viglet-design-system/site";
-import { heroRun, releasesUrl, repoUrl } from "../content";
+import { heroManifest, releasesUrl, repoUrl, transcripts } from "../content";
 import { useWords } from "../i18n";
+import { Terminal } from "./Terminal";
 
 // The opening says what jcloud is in one sentence and then shows it: a manifest, the command,
-// and what jcloud printed for it. The run is real (see heroRun), so the page cannot promise
-// output the binary does not produce.
+// and what jcloud printed for it, captured from a release (src/transcripts.json).
 export function Hero() {
   const hero = useWords().hero;
   return (
@@ -39,28 +39,12 @@ export function Hero() {
               <span />
             </div>
             <div className="pane">
-              <p className="pane-label">{hero.manifestLabel}</p>
-              <pre className="code" aria-label={hero.manifestLabel}>
-                {heroRun.manifest.map((line, i) => (
-                  <span key={i} className="code-line">
-                    {line}
-                    {"\n"}
-                  </span>
-                ))}
-              </pre>
+              <p className="pane-label">
+                <span>{hero.manifestLabel}</span>
+              </p>
+              <pre className="code">{heroManifest.join("\n")}</pre>
             </div>
-            <div className="pane pane-term">
-              <p className="pane-label">{hero.terminalLabel}</p>
-              <pre className="code term">
-                {heroRun.terminal.map((line, i) => (
-                  <span key={i} className={`t-${line.kind}`}>
-                    {line.kind === "prompt" ? <span className="t-dollar">$ </span> : null}
-                    {line.text}
-                    {"\n"}
-                  </span>
-                ))}
-              </pre>
-            </div>
+            <Terminal run={transcripts.runs.hero} label={hero.terminalLabel} />
           </div>
           <figcaption>{hero.caption}</figcaption>
         </figure>

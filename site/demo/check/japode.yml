@@ -1,0 +1,19 @@
+# A first draft with three mistakes, for `jcloud check japode.yml`: no health path,
+# a route with no hosts, and a variable that is both fixed and defaulted.
+version: 1
+
+name: notes
+image: ghcr.io/example/notes
+
+port: 8080
+
+health:
+  probe: curl
+
+routes:
+  - max_body: 2MB
+
+env:
+  - name: PUBLIC_URL
+    value: https://notes.example.com
+    default: https://notes.example.com

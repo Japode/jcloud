@@ -2,15 +2,19 @@ import type { Lang } from "./content";
 import { LangContext } from "./i18n";
 import { Footer, Nav } from "./components/Chrome";
 import { Hero } from "./components/Hero";
+import { Shape } from "./components/Shape";
+import { Verbs } from "./components/Verbs";
 
-// One page per language. The hero says what jcloud is and shows it run; the sections after
-// it (what each verb catches, how to install it) are JCT12 and JCT13.
+// One page per language, in the order a reader's questions arrive: what is it and does it
+// work (hero), what does it catch (one real run per verb), and where does each run.
 export function App({ lang }: Readonly<{ lang: Lang }>) {
   return (
     <LangContext.Provider value={lang}>
       <Nav />
       <main>
         <Hero />
+        <Verbs />
+        <Shape />
       </main>
       <Footer />
     </LangContext.Provider>

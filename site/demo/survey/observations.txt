@@ -1,0 +1,6 @@
+# What a collector saw on the server: <kind> <name> <value>, one fact per line.
+container caddy healthy
+container notes healthy
+container scratch running
+pinned notes sha256:4f1c2a9e0b7d6c5e3a8f9b1d2c4e6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5
+running notes sha256:9d8c7b6a5f4e3d2c1b0a99887766554433221100ffeeddccbbaa998877665544

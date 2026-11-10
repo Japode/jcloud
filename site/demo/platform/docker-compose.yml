@@ -1,0 +1,9 @@
+# The edge, which every service's route sits behind. The services themselves are
+# services/*/docker-compose.yml.
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./caddy:/etc/caddy:ro

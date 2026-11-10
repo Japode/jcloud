@@ -30,14 +30,31 @@ that lost an anchor fails the build.
 | `src/content.ts` | **Every word, in both languages.** The two dictionaries share one type, so a section cannot exist in only one; the links and the terminal output are written once beside them |
 | `src/i18n.tsx` | The page's language, as a React context the sections read |
 | `src/routes.ts` | The two routes and their canonical URLs, read by the prerender |
-| `src/components/` | The hero and the chrome |
-| `demo/hero/japode.yml` | The generic demo manifest the hero shows, and runs jcloud against |
+| `src/transcripts.json` | Every terminal on the page, written by `scripts/capture.sh`; never edited by hand |
+| `src/components/` | The hero, one tab per verb (`Verbs`), where each verb runs (`Shape`), the shared `Terminal`, and the chrome |
+| `demo/` | The scenarios, one per verb, all about one generic service called `notes`: `hero/` and `check/` (a manifest), `repo/` (a service repository whose Dockerfile moved the port), `platform/` (the files a platform deploys beside it), `compare/`, `survey/` and `env/` |
 | `public/icon.svg` | The mark: two sheets that have to agree, and the check |
 | `public/favicon.svg` | The mark at tab size, the check alone |
 | `scripts/prerender.mjs` | The prerender, and the per-language `<html lang>` and hreflang |
 
 ## Terminal output is never typed
 
-Every line of jcloud output on the page was printed by jcloud. The hero's run is
-`jcloud check japode.yml` in `demo/hero`, and its provenance is in the comment on `heroRun`
-in `src/content.ts`. Change the manifest and run it again, rather than editing the output.
+Every line of jcloud output on the page was printed by a released jcloud, and the page names
+which one under the tabs. To capture again, after a release or after changing a scenario:
+
+```
+bash site/scripts/capture.sh v0.2.0
+```
+
+It builds the tag the way GoReleaser does, in the Go image `ci/check.sh` pins and for Linux, so
+paths print with `/` on every machine. Then it adapts `demo/platform/caddy/sites/notes.caddy`
+with `caddy:2-alpine` into `demo/platform/caddy-adapt.json`, which `agree` reads, and runs
+`scripts/capture.mjs` in a Node image. That script runs each scenario and writes
+`src/transcripts.json`. Docker is the only requirement. Commit what it writes.
+
+The colours come from jcloud's own ANSI codes, read before they are stripped: green is a pass,
+red a refusal, and an `::error` line is the annotation GitHub Actions shows on the file.
+
+`demo/env/.env.age` is encrypted to a recipient whose private key was thrown away when the
+file was made. `jcloud env list` needs no key, which is the point that tab makes, and nobody
+can read the demo values.

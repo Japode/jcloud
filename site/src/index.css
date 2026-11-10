@@ -30,8 +30,10 @@
   margin: 0;
   padding: 0;
 }
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 .wrap {
   max-width: var(--wrap);
@@ -175,6 +177,9 @@ html {
   text-transform: uppercase;
   color: var(--term-dim);
   margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
 }
 .code {
   font-family: var(--mono);
@@ -203,6 +208,199 @@ html {
 .term .t-out {
   color: var(--term-dim);
 }
+.exit {
+  font-weight: 700;
+}
+.exit-ok {
+  color: var(--term-ok);
+}
+.exit-err {
+  color: var(--term-err);
+}
+/* The annotation is what GitHub reads, not what a person reads: present, and quieter. */
+.term .t-annotation {
+  color: var(--term-dim);
+  opacity: 0.75;
+}
+
+/* ============================================================================
+   Sections
+   ============================================================================ */
+section {
+  padding: 88px 0;
+  border-top: 1px solid var(--vg-border);
+}
+@media (max-width: 700px) {
+  section {
+    padding: 60px 0;
+  }
+}
+.sec-head {
+  max-width: 760px;
+  margin: 0 auto 40px;
+  text-align: center;
+}
+.sec-head h2 {
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  margin-bottom: 14px;
+  text-wrap: balance;
+}
+.sec-head p {
+  color: var(--vg-muted-foreground);
+  font-size: 1.06rem;
+  line-height: 1.65;
+}
+.sec-head .eyebrow {
+  color: var(--vg-brand);
+  font-size: 0.78rem;
+}
+.files {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.files li {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--vg-foreground) 7%, transparent);
+  color: var(--vg-foreground);
+  overflow-wrap: anywhere;
+}
+
+/* What it catches: one tab per verb */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.tab {
+  font: inherit;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--vg-border);
+  background: transparent;
+  color: var(--vg-muted-foreground);
+  cursor: pointer;
+}
+.tab:hover {
+  color: var(--vg-foreground);
+}
+.tab[aria-selected="true"] {
+  background: var(--vg-brand);
+  border-color: var(--vg-brand);
+  color: #fff;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--vg-brand);
+  outline-offset: 2px;
+}
+.verb-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 40px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .verb-panel {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+  }
+}
+.verb-copy h3 {
+  font-size: 1.4rem;
+  font-weight: 750;
+  margin-bottom: 12px;
+}
+.verb-copy > p {
+  color: var(--vg-muted-foreground);
+  line-height: 1.65;
+  margin-bottom: 18px;
+}
+.verb-copy .note {
+  margin-top: 18px;
+  font-size: 0.88rem;
+  border-left: 3px solid var(--vg-brand);
+  padding-left: 12px;
+}
+.verb-window .pane-term {
+  border-top: 0;
+  min-height: 220px;
+}
+.provenance {
+  margin-top: 24px;
+  text-align: center;
+  font-size: 0.84rem;
+  color: var(--vg-muted-foreground);
+}
+
+/* Where it runs: three places, joined left to right, top to bottom on a phone */
+.places {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 40px;
+}
+@media (max-width: 900px) {
+  .places {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.place {
+  position: relative;
+  border: 1px solid var(--vg-border);
+  border-radius: 14px;
+  padding: 22px;
+  background: color-mix(in oklab, var(--vg-foreground) 3%, transparent);
+}
+.place + .place::before {
+  content: "→";
+  position: absolute;
+  left: -30px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--vg-brand);
+  font-size: 1.3rem;
+}
+@media (max-width: 900px) {
+  .place + .place::before {
+    content: "↓";
+    left: 50%;
+    top: -32px;
+    transform: translateX(-50%);
+  }
+}
+.place h3 {
+  font-size: 1.12rem;
+  font-weight: 750;
+}
+.place-where {
+  color: var(--vg-muted-foreground);
+  font-size: 0.9rem;
+  margin: 4px 0 16px;
+}
+.place-verbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+.place-verbs code {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--vg-brand);
+  font-weight: 700;
+}
+
 .hero-stage figcaption {
   margin-top: 12px;
   font-size: 0.84rem;

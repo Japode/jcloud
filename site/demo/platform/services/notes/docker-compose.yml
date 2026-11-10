@@ -1,0 +1,21 @@
+services:
+  notes:
+    image: ${NOTES_IMAGE:?no image pinned}
+    container_name: japode-notes
+    restart: unless-stopped
+    environment:
+      PUBLIC_URL: ${NOTES_PUBLIC_URL:-https://notes.example.com}
+      SESSION_SECRET: ${NOTES_SESSION_SECRET:-}
+    volumes:
+      - notes-data:/data
+    expose:
+      - '8080'
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  notes-data:

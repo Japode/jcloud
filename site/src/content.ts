@@ -3,6 +3,9 @@
 // and not the other, and what does not change with the language (the links, the manifest, the
 // terminal output jcloud prints in English) is written once above them.
 
+import captured from "./transcripts.json";
+import heroYml from "../demo/hero/japode.yml?raw";
+
 export const THEME_KEY = "jcloud-theme";
 export const BASE = "/jcloud/";
 export const repoUrl = "https://github.com/Japode/jcloud";
@@ -25,39 +28,31 @@ export const pageHref = (lang: Lang) => (lang === "en" ? BASE : `${BASE}pt/`);
 // `releases/latest` is the one release link that cannot go stale on the next `v*` tag.
 export const releasesUrl = `${repoUrl}/releases/latest`;
 
-/** One line of a terminal: what was typed, what jcloud printed, and how it coloured it. */
-export type TermLine = { kind: "prompt" | "ok" | "err" | "out" | "blank"; text: string };
+/** One printed line, and how jcloud coloured it: see site/scripts/capture.mjs. */
+export type TermLine = { kind: "ok" | "err" | "out" | "annotation" | "blank"; text: string };
+export type Run = { cwd: string; cmd: string; exit: number; lines: TermLine[] };
 
 /**
- * The hero's run, copied from the terminal and not composed: jcloud's development build of
- * commit 73a1405 (2026-11-10, go1.27.1), run in site/demo/hero against the generic demo
- * manifest there. The manifest lines are that file's, with comments and the env list taken
- * out. JCT12 replaces hand copies like this one with transcripts a script captures from a
- * released binary.
+ * Every terminal on the page, as site/scripts/capture.sh recorded it from a released
+ * jcloud against the scenarios under site/demo/. Never edited by hand: change a scenario
+ * and capture again.
  */
-export const heroRun = {
-  file: "japode.yml",
-  manifest: [
-    "version: 1",
-    "name: notes",
-    "image: ghcr.io/example/notes",
-    "port: 8080",
-    "health:",
-    "  path: /healthz",
-    "  probe: curl",
-    "volumes:",
-    "  - name: data",
-    "    path: /data",
-    "routes:",
-    "  - hosts: [notes.example.com]",
-  ],
-  terminal: [
-    { kind: "prompt", text: "jcloud check japode.yml" },
-    { kind: "ok", text: "  ✓ japode.yml: notes states what it declares (1 volume(s), 1 route(s), 2 variable(s))" },
-    { kind: "blank", text: "" },
-    { kind: "ok", text: "1 manifest(s) state what they declare" },
-  ] satisfies TermLine[],
-};
+export const transcripts = captured as { version: string; runs: Record<VerbId | "hero", Run> };
+
+/**
+ * The hero's manifest: site/demo/hero/japode.yml as it is on disk, without its comments,
+ * blank lines and the env list, which the terminal under it already counts.
+ */
+export const heroManifest = heroYml
+  .split("\n")
+  .filter((l) => l.trim() !== "" && !l.trimStart().startsWith("#"))
+  .join("\n")
+  .split("\nenv:")[0]
+  .split("\n");
+
+/** The verbs the page walks through, in the order a service meets them. */
+export const verbIds = ["check", "repo", "agree", "compare", "up", "survey", "env"] as const;
+export type VerbId = (typeof verbIds)[number];
 
 // --- the words ------------------------------------------------------------------------------
 
@@ -75,6 +70,22 @@ type Words = {
     manifestLabel: string;
     terminalLabel: string;
     caption: string;
+  };
+  verbs: {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    tabsLabel: string;
+    exit: (code: number) => string;
+    annotation: string;
+    provenance: (version: string) => string;
+    items: Record<VerbId, { tab: string; title: string; body: string; files: string[] }>;
+  };
+  shape: {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    places: { name: string; where: string; files: string[]; verbs: string[] }[];
   };
   footer: { links: { href: string; label: string }[]; disclaimer: string };
 };
@@ -102,6 +113,84 @@ export const words: Record<Lang, Words> = {
       manifestLabel: "japode.yml, excerpt",
       terminalLabel: "terminal",
       caption: "A real run on a demo manifest, copied from the terminal.",
+    },
+    verbs: {
+      eyebrow: "What it catches",
+      title: "The mistakes nothing else compares",
+      lead: "docker compose config and caddy validate each read one file. A port written in three files passes both while the route aims at nothing. Each tab is one jcloud verb on a small demo service, with exactly what it printed.",
+      tabsLabel: "jcloud verbs",
+      exit: (code) => `exit ${code}`,
+      annotation: "In GitHub Actions, each ::error line becomes a mark on the manifest in the pull request.",
+      provenance: (version) => `Every line above was printed by ${version}, run against the files in site/demo.`,
+      items: {
+        check: {
+          tab: "check",
+          title: "A first draft",
+          body: "check reads one manifest and refuses what a service has to declare and does not. Here: no health path, a route with no address, and a variable that is both fixed and defaulted. Every problem is reported at once, so one run is enough.",
+          files: ["japode.yml"],
+        },
+        repo: {
+          tab: "check --repo",
+          title: "In the service's own CI",
+          body: "Somebody moved the port to 3000 in the Dockerfile and left the manifest at 8080. check --repo compares the manifest with the Dockerfile, the Caddyfile and the workflows beside it, and fails on that commit, in front of whoever made it.",
+          files: ["japode.yml", "Dockerfile", ".github/workflows/publish.yml"],
+        },
+        agree: {
+          tab: "agree",
+          title: "In the platform",
+          body: "The route still proxies to port 3000, and .env.example keeps a key the service stopped reading. agree compares the manifest with the compose file, the route as Caddy reads it, backup.conf and .env.example.",
+          files: ["services/notes/docker-compose.yml", "caddy/sites/notes.caddy", "services/notes/backup.conf", ".env.example"],
+        },
+        compare: {
+          tab: "compare",
+          title: "Two copies of one manifest",
+          body: "The platform's copy and the service's own, after the service moved its port. Comments and key order may differ between them. A fact may not.",
+          files: ["platform/services/notes/japode.yml", "compare/theirs.yml"],
+        },
+        up: {
+          tab: "up",
+          title: "Before a deploy",
+          body: "What stands between a service and a deploy: a variable the manifest declares and the configuration lacks, and no image pinned. up only reports; it brings nothing up.",
+          files: ["services/notes/japode.yml", ".env"],
+        },
+        survey: {
+          tab: "survey",
+          title: "Against the server",
+          body: "What a collector saw on the host, against what the platform declares: a container running another digest than the one pinned, and a container nothing declares. survey reads a file, not a host.",
+          files: ["survey/observations.txt", "docker-compose.yml", "services/*/japode.yml"],
+        },
+        env: {
+          tab: "env",
+          title: "The configuration",
+          body: "Keys are readable and each value is encrypted with age. list needs no private key, so CI can check which keys exist without holding a secret.",
+          files: [".env.age"],
+        },
+      },
+    },
+    shape: {
+      eyebrow: "Where it runs",
+      title: "One manifest, three places that have to agree with it",
+      lead: "The manifest sits in the service's repository and a copy sits in the platform's. jcloud runs in both, and against what the server reports.",
+      places: [
+        {
+          name: "Service repository",
+          where: "its CI, on every pull request",
+          files: ["japode.yml", "Dockerfile", "Caddyfile", ".github/workflows"],
+          verbs: ["check", "check --repo"],
+        },
+        {
+          name: "Platform repository",
+          where: "its CI, and before a deploy",
+          files: ["services/<name>/japode.yml", "docker-compose.yml", "caddy/sites/<name>.caddy", "backup.conf", ".env.example", ".env.age"],
+          verbs: ["agree", "compare", "up", "env"],
+        },
+        {
+          name: "Server",
+          where: "read by a collector, never by jcloud",
+          files: ["running containers", "pinned digests"],
+          verbs: ["survey"],
+        },
+      ],
     },
     footer: {
       links: [
@@ -133,6 +222,84 @@ export const words: Record<Lang, Words> = {
       manifestLabel: "japode.yml, trecho",
       terminalLabel: "terminal",
       caption: "Uma execução real num manifesto de demonstração, copiada do terminal.",
+    },
+    verbs: {
+      eyebrow: "O que ele detecta",
+      title: "Os erros que nenhuma outra ferramenta compara",
+      lead: "O docker compose config e o caddy validate leem um arquivo cada. Uma porta escrita em três arquivos passa nos dois enquanto a rota aponta para o nada. Cada aba é um comando do jcloud num pequeno serviço de demonstração, com exatamente o que ele imprimiu.",
+      tabsLabel: "comandos do jcloud",
+      exit: (code) => `saída ${code}`,
+      annotation: "No GitHub Actions, cada linha ::error vira uma marca no manifesto, dentro do pull request.",
+      provenance: (version) => `Cada linha acima foi impressa pelo ${version}, rodando sobre os arquivos de site/demo.`,
+      items: {
+        check: {
+          tab: "check",
+          title: "Um primeiro rascunho",
+          body: "O check lê um manifesto e recusa o que um serviço precisa declarar e não declara. Aqui: falta o caminho de health, uma rota não tem endereço e uma variável é fixa e tem padrão ao mesmo tempo. Todos os problemas saem de uma vez, então basta rodar uma vez.",
+          files: ["japode.yml"],
+        },
+        repo: {
+          tab: "check --repo",
+          title: "No CI do próprio serviço",
+          body: "Alguém mudou a porta para 3000 no Dockerfile e deixou o manifesto em 8080. O check --repo compara o manifesto com o Dockerfile, o Caddyfile e os workflows ao lado e falha naquele commit, na frente de quem o fez.",
+          files: ["japode.yml", "Dockerfile", ".github/workflows/publish.yml"],
+        },
+        agree: {
+          tab: "agree",
+          title: "Na plataforma",
+          body: "A rota ainda aponta para a porta 3000, e o .env.example guarda uma chave que o serviço deixou de ler. O agree compara o manifesto com o compose, com a rota como o Caddy a lê, com o backup.conf e com o .env.example.",
+          files: ["services/notes/docker-compose.yml", "caddy/sites/notes.caddy", "services/notes/backup.conf", ".env.example"],
+        },
+        compare: {
+          tab: "compare",
+          title: "Duas cópias do mesmo manifesto",
+          body: "A cópia da plataforma e a do próprio serviço, depois que o serviço mudou a porta. Comentários e ordem das chaves podem diferir entre elas. Um fato, não.",
+          files: ["platform/services/notes/japode.yml", "compare/theirs.yml"],
+        },
+        up: {
+          tab: "up",
+          title: "Antes de um deploy",
+          body: "O que separa um serviço de um deploy: uma variável que o manifesto declara e a configuração não tem, e nenhuma imagem fixada. O up só informa; ele não sobe nada.",
+          files: ["services/notes/japode.yml", ".env"],
+        },
+        survey: {
+          tab: "survey",
+          title: "Contra o servidor",
+          body: "O que um coletor viu no host, contra o que a plataforma declara: um contêiner rodando um digest diferente do fixado, e um contêiner que ninguém declara. O survey lê um arquivo, não um host.",
+          files: ["survey/observations.txt", "docker-compose.yml", "services/*/japode.yml"],
+        },
+        env: {
+          tab: "env",
+          title: "A configuração",
+          body: "As chaves ficam legíveis e cada valor é criptografado com age. O list não precisa da chave privada, então o CI confere quais chaves existem sem guardar segredo nenhum.",
+          files: [".env.age"],
+        },
+      },
+    },
+    shape: {
+      eyebrow: "Onde ele roda",
+      title: "Um manifesto, três lugares que precisam concordar com ele",
+      lead: "O manifesto fica no repositório do serviço e uma cópia fica no da plataforma. O jcloud roda nos dois, e contra o que o servidor informa.",
+      places: [
+        {
+          name: "Repositório do serviço",
+          where: "no CI dele, a cada pull request",
+          files: ["japode.yml", "Dockerfile", "Caddyfile", ".github/workflows"],
+          verbs: ["check", "check --repo"],
+        },
+        {
+          name: "Repositório da plataforma",
+          where: "no CI dela, e antes de um deploy",
+          files: ["services/<nome>/japode.yml", "docker-compose.yml", "caddy/sites/<nome>.caddy", "backup.conf", ".env.example", ".env.age"],
+          verbs: ["agree", "compare", "up", "env"],
+        },
+        {
+          name: "Servidor",
+          where: "lido por um coletor, nunca pelo jcloud",
+          files: ["contêineres rodando", "digests fixados"],
+          verbs: ["survey"],
+        },
+      ],
     },
     footer: {
       links: [

@@ -1,0 +1,269 @@
+{
+  "version": "jcloud v0.2.0 (schema version 1, built with go1.26.8)",
+  "runs": {
+    "hero": {
+      "cwd": "demo/hero",
+      "cmd": "jcloud check japode.yml",
+      "exit": 0,
+      "lines": [
+        {
+          "kind": "ok",
+          "text": "  ✓ japode.yml: notes states what it declares (1 volume(s), 1 route(s), 2 variable(s))"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "ok",
+          "text": "1 manifest(s) state what they declare"
+        }
+      ]
+    },
+    "check": {
+      "cwd": "demo/check",
+      "cmd": "jcloud check japode.yml",
+      "exit": 1,
+      "lines": [
+        {
+          "kind": "err",
+          "text": "  ✗ japode.yml (.)"
+        },
+        {
+          "kind": "out",
+          "text": "      health.path: is missing — the deploy waits on it and the route probes it"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=japode.yml::health.path: is missing — the deploy waits on it and the route probes it"
+        },
+        {
+          "kind": "out",
+          "text": "      routes[0].hosts: is missing — a route with no address reaches nothing"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=japode.yml::routes[0].hosts: is missing — a route with no address reaches nothing"
+        },
+        {
+          "kind": "out",
+          "text": "      env[0]: names both default: and value: — a fixed value is not configurable"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=japode.yml::env[0]: names both default: and value: — a fixed value is not configurable"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "err",
+          "text": "1 of 1 manifest(s) refused"
+        }
+      ]
+    },
+    "repo": {
+      "cwd": "demo/repo",
+      "cmd": "jcloud check --repo . japode.yml",
+      "exit": 1,
+      "lines": [
+        {
+          "kind": "err",
+          "text": "  ✗ japode.yml (.)"
+        },
+        {
+          "kind": "out",
+          "text": "      Dockerfile: EXPOSE names 3000 and the manifest declares port 8080"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=japode.yml::Dockerfile: EXPOSE names 3000 and the manifest declares port 8080"
+        },
+        {
+          "kind": "out",
+          "text": "      Dockerfile: the HEALTHCHECK does not probe port 8080"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=japode.yml::Dockerfile: the HEALTHCHECK does not probe port 8080"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "err",
+          "text": "1 of 1 manifest(s) refused"
+        }
+      ]
+    },
+    "agree": {
+      "cwd": "demo/platform",
+      "cmd": "jcloud agree --adapted caddy-adapt.json . services/notes/japode.yml",
+      "exit": 1,
+      "lines": [
+        {
+          "kind": "err",
+          "text": "  ✗ services/notes/japode.yml (services/notes)"
+        },
+        {
+          "kind": "out",
+          "text": "      caddy/sites/notes.caddy routes[0]: proxies to [notes:3000], and the manifest declares notes:8080"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=services/notes/japode.yml::caddy/sites/notes.caddy routes[0]: proxies to [notes:3000], and the manifest declares notes:8080"
+        },
+        {
+          "kind": "out",
+          "text": "      .env.example: NOTES_SMTP_HOST= is not declared by the manifest — a key nobody reads is an invitation to set it"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=services/notes/japode.yml::.env.example: NOTES_SMTP_HOST= is not declared by the manifest — a key nobody reads is an invitation to set it"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "err",
+          "text": "1 of 1 manifest(s) refused"
+        }
+      ]
+    },
+    "compare": {
+      "cwd": "demo/.",
+      "cmd": "jcloud compare platform/services/notes/japode.yml compare/theirs.yml",
+      "exit": 1,
+      "lines": [
+        {
+          "kind": "err",
+          "text": "  ✗ platform/services/notes/japode.yml and compare/theirs.yml disagree"
+        },
+        {
+          "kind": "out",
+          "text": "      platform/services/notes/japode.yml has \"port: 8080\""
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=platform/services/notes/japode.yml::platform/services/notes/japode.yml has \"port: 8080\""
+        },
+        {
+          "kind": "out",
+          "text": "      compare/theirs.yml has \"port: 3000\""
+        },
+        {
+          "kind": "annotation",
+          "text": "::error file=platform/services/notes/japode.yml::compare/theirs.yml has \"port: 3000\""
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "err",
+          "text": "the two copies of the manifest disagree"
+        }
+      ]
+    },
+    "up": {
+      "cwd": "demo/platform",
+      "cmd": "jcloud up notes",
+      "exit": 1,
+      "lines": [
+        {
+          "kind": "err",
+          "text": "  ✗ notes"
+        },
+        {
+          "kind": "out",
+          "text": "      NOTES_SESSION_SECRET is declared and not in .env — add it to the SERVICES_ENV secret"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error::NOTES_SESSION_SECRET is declared by services/notes/japode.yml and missing from the configuration"
+        },
+        {
+          "kind": "out",
+          "text": "      no image pinned — its CI has to publish one, and the deploy takes the digest from there (JC8)"
+        },
+        {
+          "kind": "out",
+          "text": "      what it did publish is not looked up here: scripts/published-digests.sh gathers it, and --published reads it"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "err",
+          "text": "1 of 1 service(s) would stop a deploy — of any service, not only their own"
+        }
+      ]
+    },
+    "survey": {
+      "cwd": "demo/platform",
+      "cmd": "jcloud survey ../survey/observations.txt",
+      "exit": 1,
+      "lines": [
+        {
+          "kind": "err",
+          "text": "  ✗ notes is running sha256:9d8c7b6a5f4e3d2c1b0a99887766554433221100ffeeddccbbaa998877665544 and the deploy has sha256:4f1c2a9e0b7d6c5e3a8f9b1d2c4e6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5 pinned — the next deploy would change it back"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error::notes is running sha256:9d8c7b6a5f4e3d2c1b0a99887766554433221100ffeeddccbbaa998877665544 and the deploy has sha256:4f1c2a9e0b7d6c5e3a8f9b1d2c4e6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5 pinned — the next deploy would change it back"
+        },
+        {
+          "kind": "err",
+          "text": "  ✗ scratch running on the server and declared by nothing here"
+        },
+        {
+          "kind": "annotation",
+          "text": "::error::scratch running on the server and declared by nothing here"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "err",
+          "text": "2 divergence(s) between this repository and the server"
+        }
+      ]
+    },
+    "env": {
+      "cwd": "demo/env",
+      "cmd": "jcloud env list",
+      "exit": 0,
+      "lines": [
+        {
+          "kind": "out",
+          "text": "  NOTES_HOSTS"
+        },
+        {
+          "kind": "out",
+          "text": "  NOTES_PUBLIC_URL"
+        },
+        {
+          "kind": "out",
+          "text": "  NOTES_SESSION_SECRET"
+        },
+        {
+          "kind": "blank",
+          "text": ""
+        },
+        {
+          "kind": "out",
+          "text": "3 key(s), readable by 1 recipient(s):"
+        },
+        {
+          "kind": "out",
+          "text": "  age18csr596e53mzyea3mcq6qdlfm2aeewuh0gjwuc4npxt4d3jta5csxadjnw"
+        }
+      ]
+    }
+  }
+}
