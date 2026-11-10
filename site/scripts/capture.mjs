@@ -5,7 +5,8 @@
 // stdout and stderr go to one file descriptor, so the lines keep the order a terminal
 // shows them in. jcloud's colours are read before they are stripped: green is a pass,
 // red a refusal, and an `::error` line is the annotation GitHub Actions turns into a
-// mark on the file.
+// mark on the file. Since JCT17 jcloud prints those only under GITHUB_ACTIONS=true,
+// which this never sets, so the page shows what a terminal shows.
 import { spawnSync } from "node:child_process";
 import { closeSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +23,7 @@ const scenarios = [
   { id: "hero", cwd: "hero", cmd: "jcloud check japode.yml" },
   { id: "check", cwd: "check", cmd: "jcloud check japode.yml" },
   { id: "repo", cwd: "repo", cmd: "jcloud check --repo . japode.yml" },
-  { id: "agree", cwd: "platform", cmd: "jcloud agree --adapted caddy-adapt.json . services/notes/japode.yml" },
+  { id: "agree", cwd: "platform", cmd: "jcloud agree --routes caddy-adapt.json . services/notes/japode.yml" },
   { id: "compare", cwd: ".", cmd: "jcloud compare platform/services/notes/japode.yml compare/theirs.yml" },
   { id: "up", cwd: "platform", cmd: "jcloud up notes" },
   { id: "survey", cwd: "platform", cmd: "jcloud survey ../survey/observations.txt" },

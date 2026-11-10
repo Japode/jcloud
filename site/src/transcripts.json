@@ -1,5 +1,5 @@
 {
-  "version": "jcloud v0.2.0 (schema version 1, built with go1.26.8)",
+  "version": "jcloud v0.2.0-24-g67df02c (schema version 1, built with go1.26.8)",
   "runs": {
     "hero": {
       "cwd": "demo/hero",
@@ -34,24 +34,12 @@
           "text": "      health.path: is missing — the deploy waits on it and the route probes it"
         },
         {
-          "kind": "annotation",
-          "text": "::error file=japode.yml::health.path: is missing — the deploy waits on it and the route probes it"
-        },
-        {
           "kind": "out",
           "text": "      routes[0].hosts: is missing — a route with no address reaches nothing"
         },
         {
-          "kind": "annotation",
-          "text": "::error file=japode.yml::routes[0].hosts: is missing — a route with no address reaches nothing"
-        },
-        {
           "kind": "out",
           "text": "      env[0]: names both default: and value: — a fixed value is not configurable"
-        },
-        {
-          "kind": "annotation",
-          "text": "::error file=japode.yml::env[0]: names both default: and value: — a fixed value is not configurable"
         },
         {
           "kind": "blank",
@@ -77,16 +65,8 @@
           "text": "      Dockerfile: EXPOSE names 3000 and the manifest declares port 8080"
         },
         {
-          "kind": "annotation",
-          "text": "::error file=japode.yml::Dockerfile: EXPOSE names 3000 and the manifest declares port 8080"
-        },
-        {
           "kind": "out",
           "text": "      Dockerfile: the HEALTHCHECK does not probe port 8080"
-        },
-        {
-          "kind": "annotation",
-          "text": "::error file=japode.yml::Dockerfile: the HEALTHCHECK does not probe port 8080"
         },
         {
           "kind": "blank",
@@ -100,7 +80,7 @@
     },
     "agree": {
       "cwd": "demo/platform",
-      "cmd": "jcloud agree --adapted caddy-adapt.json . services/notes/japode.yml",
+      "cmd": "jcloud agree --routes caddy-adapt.json . services/notes/japode.yml",
       "exit": 1,
       "lines": [
         {
@@ -112,16 +92,8 @@
           "text": "      caddy/sites/notes.caddy routes[0]: proxies to [notes:3000], and the manifest declares notes:8080"
         },
         {
-          "kind": "annotation",
-          "text": "::error file=services/notes/japode.yml::caddy/sites/notes.caddy routes[0]: proxies to [notes:3000], and the manifest declares notes:8080"
-        },
-        {
           "kind": "out",
           "text": "      .env.example: NOTES_SMTP_HOST= is not declared by the manifest — a key nobody reads is an invitation to set it"
-        },
-        {
-          "kind": "annotation",
-          "text": "::error file=services/notes/japode.yml::.env.example: NOTES_SMTP_HOST= is not declared by the manifest — a key nobody reads is an invitation to set it"
         },
         {
           "kind": "blank",
@@ -144,19 +116,11 @@
         },
         {
           "kind": "out",
-          "text": "      platform/services/notes/japode.yml has \"port: 8080\""
-        },
-        {
-          "kind": "annotation",
-          "text": "::error file=platform/services/notes/japode.yml::platform/services/notes/japode.yml has \"port: 8080\""
+          "text": "      port: platform/services/notes/japode.yml has \"port: 8080\""
         },
         {
           "kind": "out",
-          "text": "      compare/theirs.yml has \"port: 3000\""
-        },
-        {
-          "kind": "annotation",
-          "text": "::error file=platform/services/notes/japode.yml::compare/theirs.yml has \"port: 3000\""
+          "text": "      port: compare/theirs.yml has \"port: 3000\""
         },
         {
           "kind": "blank",
@@ -180,10 +144,6 @@
         {
           "kind": "out",
           "text": "      NOTES_SESSION_SECRET is declared and not in .env — add it to the SERVICES_ENV secret"
-        },
-        {
-          "kind": "annotation",
-          "text": "::error::NOTES_SESSION_SECRET is declared by services/notes/japode.yml and missing from the configuration"
         },
         {
           "kind": "out",
@@ -213,16 +173,8 @@
           "text": "  ✗ notes is running sha256:9d8c7b6a5f4e3d2c1b0a99887766554433221100ffeeddccbbaa998877665544 and the deploy has sha256:4f1c2a9e0b7d6c5e3a8f9b1d2c4e6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5 pinned — the next deploy would change it back"
         },
         {
-          "kind": "annotation",
-          "text": "::error::notes is running sha256:9d8c7b6a5f4e3d2c1b0a99887766554433221100ffeeddccbbaa998877665544 and the deploy has sha256:4f1c2a9e0b7d6c5e3a8f9b1d2c4e6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5 pinned — the next deploy would change it back"
-        },
-        {
           "kind": "err",
           "text": "  ✗ scratch running on the server and declared by nothing here"
-        },
-        {
-          "kind": "annotation",
-          "text": "::error::scratch running on the server and declared by nothing here"
         },
         {
           "kind": "blank",

@@ -4,6 +4,11 @@ set -euo pipefail
 # Capture every terminal on the page from a released jcloud (JCT12).
 #
 #   bash site/scripts/capture.sh v0.2.0
+#   bash site/scripts/capture.sh HEAD     # a change not yet released
+#
+# Any git ref is accepted, and the build is stamped with `git describe --tags` of it:
+# exactly the tag for a release, and v0.2.0-24-g67df02c for a commit after one, so the
+# page's provenance line says truthfully which build printed it.
 #
 # Nothing the page shows as jcloud output is typed by hand: copy that drifts from the
 # binary is the drift jcloud exists to stop. This builds the tag the way GoReleaser does
@@ -15,7 +20,7 @@ set -euo pipefail
 # Docker is the only requirement. Run it again after a release, or after changing a
 # scenario under site/demo/, and commit what it writes.
 
-TAG="${1:?usage: capture.sh <tag>, e.g. v0.2.0}"
+REF="${1:?usage: capture.sh <tag or ref>, e.g. v0.2.0 or HEAD}"
 SITE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ROOT="$(cd "$SITE/.." && pwd)"
 
@@ -24,12 +29,13 @@ GO_IMAGE="$(sed -n 's/^GO_IMAGE="\${GO_IMAGE:-\(.*\)}"$/\1/p' "$ROOT/ci/check.sh
 CADDY_IMAGE="${CADDY_IMAGE:-caddy:2-alpine}"
 NODE_IMAGE="${NODE_IMAGE:-node:22-alpine}"
 
-git -C "$ROOT" rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null ||
-    { echo "capture: no tag $TAG in this repository" >&2; exit 1; }
+git -C "$ROOT" rev-parse --verify --quiet "$REF^{commit}" >/dev/null ||
+    { echo "capture: no commit $REF in this repository" >&2; exit 1; }
+TAG="$(git -C "$ROOT" describe --tags "$REF")"
 
 OUT="$SITE/.capture"
 rm -rf "$OUT" && mkdir -p "$OUT/src"
-git -C "$ROOT" archive "$TAG" | tar -x -C "$OUT/src"
+git -C "$ROOT" archive "$REF" | tar -x -C "$OUT/src"
 
 # Git Bash rewrites a leading / in arguments to a Windows path; `pwd -W` gives docker a
 # path it can mount.
