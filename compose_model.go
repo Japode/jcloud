@@ -116,7 +116,16 @@ func (s composeService) targets(target string) bool {
 
 // listens is `expose:` or a published port's target: either way the container is
 // meant to be reached on it.
+//
+// A service that declares neither (JCT20) is reached over a user network by its
+// name, where expose is documentation nobody writes; then the port its healthcheck
+// connects to is the statement, and the edge's upstream is held to the same port
+// by the route check. One that declares any expose or port must still list this
+// one — that is the Japode reading, and it is not loosened.
 func (s composeService) listens(port int) bool {
+	if len(s.Expose) == 0 && len(s.Ports) == 0 {
+		return strings.Contains(s.health(), fmt.Sprint(port))
+	}
 	for _, e := range s.Expose {
 		if e == fmt.Sprint(port) || strings.HasPrefix(e, fmt.Sprint(port)+"/") {
 			return true
@@ -170,7 +179,7 @@ func (m *Manifest) agreeComposeModel(model *composeModel, needs []resolvedNeed, 
 		bad("%s: no healthcheck:, so the deploy has nothing to wait on", at)
 	} else {
 		hc := svc.health()
-		if !strings.Contains(hc, m.Health.Path) {
+		if m.Health.Path != "" && !strings.Contains(hc, m.Health.Path) {
 			bad("%s: the healthcheck does not probe %s, which the manifest declares", at, m.Health.Path)
 		}
 		if !strings.Contains(hc, fmt.Sprint(m.Port)) {

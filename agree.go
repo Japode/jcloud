@@ -99,6 +99,11 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 	needs, problems := m.resolveNeeds(root, prof)
 	p = append(p, problems...)
 
+	// A tcp probe needs no path (JCT20), but a Caddy edge probes the upstream
+	// itself with health_uri, and that asks one.
+	if m.Health.Probe == "tcp" && m.Health.Path == "" && prof.RouteKind == "caddy" && len(m.Routes) > 0 {
+		bad("health.path: is missing — a tcp probe asks none, and a Caddy edge's health_uri does")
+	}
 	if m.Build != "" && !prof.Builds {
 		bad("build: %s — this platform builds nothing on its host, and jcloud.yml does not say builds: true; name the published image instead (JCT7)", m.Build)
 	}
@@ -330,7 +335,7 @@ func (m *Manifest) agreeCompose(at, body string, prof *Profile) []string {
 		bad("%s: no healthcheck:, so the deploy has nothing to wait on", at)
 	} else {
 		hc := own[i:]
-		if !strings.Contains(hc, m.Health.Path) {
+		if m.Health.Path != "" && !strings.Contains(hc, m.Health.Path) {
 			bad("%s: the healthcheck does not probe %s, which the manifest declares", at, m.Health.Path)
 		}
 		if !strings.Contains(hc, fmt.Sprint(m.Port)) {

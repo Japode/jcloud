@@ -199,7 +199,9 @@ var durationRE = regexp.MustCompile(`^([0-9]+(ms|s|m|h))+$`)
 // A body size Caddy accepts, which is not a compose duration and not a bare number.
 var sizeRE = regexp.MustCompile(`^[0-9]+(B|KB|MB|GB|KiB|MiB|GiB)$`)
 
-var probes = map[string]bool{"node": true, "curl": true, "wget": true}
+// tcp is a connect to the port and no request at all (JCT20): what an image with
+// no HTTP client probes itself with, e.g. `bash -c '</dev/tcp/localhost/2700'`.
+var probes = map[string]bool{"node": true, "curl": true, "wget": true, "tcp": true}
 
 // Parse reads one manifest. A misspelt key is an error here rather than a field
 // silently left at its zero value.
@@ -280,19 +282,22 @@ func (h *Health) validate() []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
-	if h.Path == "" {
+	// A tcp probe (JCT20) connects to the port and asks no path, so it needs
+	// none — unless the edge asks one, which agree says once it knows the edge.
+	switch {
+	case h.Path == "" && h.Probe != "tcp":
 		bad("health.path: is missing — the deploy waits on it and the route probes it")
-	} else if !strings.HasPrefix(h.Path, "/") {
+	case h.Path != "" && !strings.HasPrefix(h.Path, "/"):
 		bad("health.path: %q is not a path", h.Path)
 	}
 
 	switch {
 	case h.Probe == "" && len(h.Test) == 0:
-		bad("health: needs a probe: of node, curl or wget, or a test: for an image with none of them")
+		bad("health: needs a probe: of node, curl, wget or tcp, or a test: for an image with none of them")
 	case h.Probe != "" && len(h.Test) > 0:
 		bad("health: names both probe: %q and test: — one of the two would have to win silently", h.Probe)
 	case h.Probe != "" && !probes[h.Probe]:
-		bad("health.probe: %q is not one of node, curl, wget", h.Probe)
+		bad("health.probe: %q is not one of node, curl, wget, tcp", h.Probe)
 	}
 
 	if h.StartPeriod != "" && !durationRE.MatchString(h.StartPeriod) {

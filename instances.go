@@ -93,6 +93,7 @@ func (m *Manifest) agreeInstances(model *composeModel, byHost map[string]*proxy,
 			bad("%s: no healthcheck:, so nothing waits on this copy", at)
 		} else {
 			hc := svc.health()
+			// A tcp probe's path is "", which every healthcheck contains (JCT20).
 			if !strings.Contains(hc, m.Health.Path) || !strings.Contains(hc, fmt.Sprint(m.Port)) {
 				bad("%s: the healthcheck is %q and does not probe %s on port %d as %s does", at, hc, m.Health.Path, m.Port, m.Name)
 			}

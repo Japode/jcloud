@@ -49,29 +49,6 @@ is passed through.
 The two repositories land in order: the platform script first, then the jcloud release
 that drops the fallback, or the platform's CI turns red on a model it never built.
 
-### §JCT20 How a container is reached and probed
-
-Two of agree's compose assertions encode how the Japode platform reaches a container,
-and Viglet Cloud reaches its own another way. Both were read off its generated
-docker/docker-compose.clients.yml while building JCT9.
-
-The port. agreeComposeModel (and agreeInstances, and the textual agreeCompose) require
-the manifest's port in `expose:` or a published port. Viglet services join the `viglet`
-network and declare neither, because expose is documentation there and nginx dials the
-container name. The port is still stated twice: in the healthcheck and in the edge's
-upstream. So the evidence should be any of the three (expose, a published target, the
-healthcheck naming it), and the route check already holds the upstream to it.
-
-The probe. Turing's healthcheck is `bash -c '</dev/tcp/localhost/2700'`: a TCP connect,
-no HTTP path. The manifest requires health.path, and agree requires the healthcheck to
-mention it. A `probe: tcp` with no path is the honest statement: agree then asserts only
-that the healthcheck names the port, and the edge, which has no active check under nginx
-(JCT3), needs no path either. Under Caddy a tcp probe still needs a health_uri for the
-edge, so Validate refuses `probe: tcp` there unless a path is given too.
-
-Both widen what agrees; neither loosens Japode, whose services keep expose and HTTP
-probes and still pass the stricter reading.
-
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on

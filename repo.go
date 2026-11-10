@@ -145,7 +145,8 @@ func (m *Manifest) agreeDockerfile(at, body string) []string {
 	if probe == "" {
 		bad("%s: no HEALTHCHECK the image runs, so whether it answers %s is unchecked here — the deploy waits on that path and the edge probes it", at, m.Health.Path)
 	} else {
-		if !strings.Contains(probe, m.Health.Path) {
+		// A tcp probe declares no path (JCT20): the port below is the whole of it.
+		if m.Health.Path != "" && !strings.Contains(probe, m.Health.Path) {
 			bad("%s: the HEALTHCHECK does not probe %s, which the manifest declares", at, m.Health.Path)
 		}
 		if !strings.Contains(probe, fmt.Sprint(m.Port)) {
