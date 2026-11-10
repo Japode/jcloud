@@ -167,3 +167,42 @@ repository's work, filed in its own roadmap; this line is the half that keeps it
 after every jcloud change.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
+
+## Block D — What jcloud prints: a report a reader can act on
+
+### §JCT16 JCT16 — compare reports only what differs
+
+`Manifest.CompareTo` (compare.go) trims the common head and tail of the two canonical
+renderings and reports everything left, from both sides. With one difference that is one
+line each. With two far apart it is every line between them: found on 2026-11-10 while
+building the product page's compare tab, where the platform copy at port 8080 and a
+service copy at port 3000 that had also gained one variable (`MAX_UPLOAD`) printed some
+60 lines, `health:`, `volumes:` and `routes:` included, none of which differ. The page
+shows the one-difference case for that reason.
+
+The doc comment argues a general diff is not needed because the field order is the
+struct's, so two manifests that disagree about a field disagree at the same place. That
+holds for one field, and is exactly why a line-level LCS over the two canonical
+renderings would stay small and exact: shared lines resync between differences. Keep the
+"both sides shown" form per hunk, and say which field each hunk sits under (`env[2]`,
+`port`) rather than quoting indentation.
+
+Reproduce: `site/demo/platform/services/notes/japode.yml` against a copy with `port:
+3000` and one more `env` entry. A test with two separated differences asserts the report
+names only those.
+
+### §JCT17 JCT17 — when the ::error annotations are printed
+
+README.md says "inside GitHub Actions each one is also printed as an `::error file=…::`
+annotation". jcloud prints them everywhere: main.go (check and compare), up.go and
+survey.go call `fmt.Printf("::error…")` with no condition, and nothing reads
+`GITHUB_ACTIONS`. Seen on 2026-11-10 running `jcloud check` in a Windows terminal, and
+in every transcript `site/scripts/capture.sh` recorded in a plain container.
+
+Either the README describes what happens, or jcloud prints the annotations only when
+`GITHUB_ACTIONS=true`. The second halves what a person reads locally, where each problem
+appears twice. It changes the output a caller may parse, so it is also a change to the
+product page's transcripts, which are captured again with the release that ships it.
+
+Decide which, then make the README and the binary say the same thing; a test pins the
+behaviour on both sides of the variable if the binary changes.
