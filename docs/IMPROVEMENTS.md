@@ -4,25 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT5 Shared needs
-
-A need today resolves to `<service>-<need>`, a container the service owns with its own
-volume and the image addons/<type>/addon.yml pins (needs.go). Viglet Cloud has the other
-shape: platform services (postgres, redis, keycloak) that several products reach by
-name, each product with its own database and user inside the shared server. The schema
-gains `shared: <platform service>` on a need. The addon still states image, port,
-healthcheck and the variables the client must set, but the container is the named
-platform service, depends_on is asserted against it, and its volume is backed up once by
-the platform, not once per client.
-
-The addon files for postgres, redis and keycloak are the platform repository's data, not
-jcloud's; this line makes them expressible. What jcloud owns is the validation: a shared
-need names a service the model from JCT4 declares, and the variables the addon lists
-reach the client container.
-
-Keycloak also brings the realm import and the client registration, which no manifest
-field covers. That stays outside the schema.
-
 ### §JCT6 Backup agreement is the platform to declare
 
 agreeBackupConf reads `services/<name>/backup.conf` in the directive grammar of Japode's

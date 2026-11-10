@@ -37,6 +37,11 @@ type resolvedNeed struct {
 	svc string
 }
 
+// owned is a resolved need whose container is this service's alone, and so whose
+// volume this service's backup.conf answers for. A shared one (JCT5) is backed up
+// once, by the platform that runs it.
+func (r resolvedNeed) owned() bool { return r.addon != nil && r.need.Shared == "" }
+
 // resolveNeeds reads addons/<type>/addon.yml for every need, from the repository
 // root the caller is comparing against.
 func (m *Manifest) resolveNeeds(root string, prof *Profile) ([]resolvedNeed, []string) {
@@ -44,6 +49,9 @@ func (m *Manifest) resolveNeeds(root string, prof *Profile) ([]resolvedNeed, []s
 	var problems []string
 	for _, n := range m.Needs {
 		r := resolvedNeed{need: n, svc: m.Name + "-" + n.Name}
+		if n.Shared != "" {
+			r.svc = n.Shared // the platform's service, named and not derived (JCT5)
+		}
 		at := filepath.ToSlash(prof.AddonFile(n.Type))
 		out = append(out, r)
 		last := &out[len(out)-1]
@@ -89,6 +97,13 @@ func (m *Manifest) agreeNeeds(at, body string, needs []resolvedNeed, prof *Profi
 	for _, r := range needs {
 		if r.addon == nil {
 			continue // resolveNeeds already said why, once.
+		}
+		if r.need.Shared != "" {
+			// The shared service is declared wherever the platform declares it,
+			// which this file is not; only the model sees both (JCT5). Said, not
+			// skipped, for JC66's reason.
+			bad("%s: needs[%s] is shared with %s, which only the compose model can show — pass --compose", at, r.need.Name, r.svc)
+			continue
 		}
 		a := r.addon
 

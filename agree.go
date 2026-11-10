@@ -167,7 +167,7 @@ func (m *Manifest) wantsBackupConf(needs []resolvedNeed) bool {
 		}
 	}
 	for _, n := range needs {
-		if n.addon != nil && n.addon.Volume.Backup != "" {
+		if n.owned() && n.addon.Volume.Backup != "" {
 			return true
 		}
 	}
@@ -323,7 +323,7 @@ func (m *Manifest) agreeBackupConf(at, body string, needs []resolvedNeed) []stri
 	// belongs to the addon, because whoever writes `needs: [{type: mariadb}]` has
 	// no way of knowing that a live InnoDB directory cannot be copied.
 	for _, n := range needs {
-		if n.addon == nil || n.addon.Volume.Backup == "" {
+		if !n.owned() || n.addon.Volume.Backup == "" {
 			continue
 		}
 		if !hasDirective(body, n.addon.Volume.Backup, n.svc) {
@@ -373,7 +373,7 @@ func (m *Manifest) declaresDirective(fields []string, needs []resolvedNeed) bool
 	kind, key := fields[0], fields[1]
 	if len(fields) == 2 {
 		for _, n := range needs {
-			if n.addon != nil && n.addon.Volume.Backup == kind && n.svc == key {
+			if n.owned() && n.addon.Volume.Backup == kind && n.svc == key {
 				return true
 			}
 		}

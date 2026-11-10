@@ -84,6 +84,16 @@ func (s composeService) mounts(source, target string) bool {
 	return false
 }
 
+// targets is a volume mounted at target, whatever it is called.
+func (s composeService) targets(target string) bool {
+	for _, v := range s.Volumes {
+		if v.Type == "volume" && v.Target == target {
+			return true
+		}
+	}
+	return false
+}
+
 // listens is `expose:` or a published port's target: either way the container is
 // meant to be reached on it.
 func (s composeService) listens(port int) bool {
@@ -178,18 +188,31 @@ func (m *Manifest) agreeNeedModel(model *composeModel, app composeService, r res
 	a := r.addon
 	at := "compose services." + r.svc
 
+	// A shared need (JCT5) is the platform's service: its name, its volume's name
+	// and the variables each client states inside it are the platform's to choose,
+	// so only what the addon pins is held — image, a volume at its path, health,
+	// fixed values — and, below, that this client waits on it and reaches it.
+	shared := r.need.Shared != ""
+
 	db, ok := model.Services[r.svc]
 	if !ok {
-		bad("%s: the compose model has no such service, and addons/%s brings one", at, r.need.Type)
+		if shared {
+			bad("%s: the compose model has no such service, which needs[%s].shared names", at, r.need.Name)
+		} else {
+			bad("%s: the compose model has no such service, and addons/%s brings one", at, r.need.Type)
+		}
 		return p
 	}
-	if want := prof.Container(r.svc); db.ContainerName != want {
+	if want := prof.Container(r.svc); !shared && db.ContainerName != want {
 		bad("%s: container_name is %q and not %s — the need's container name is the service's name and its own, derived", at, db.ContainerName, want)
 	}
 	if db.Image != a.Image {
 		bad("%s: runs %q and not %s, which addons/%s pins", at, db.Image, a.Image, r.need.Type)
 	}
-	if !db.mounts(r.svc, a.Volume.Path) {
+	switch {
+	case shared && !db.targets(a.Volume.Path):
+		bad("%s: no volume is mounted at %s, so the database every client shares is in the container and goes with the next deploy", at, a.Volume.Path)
+	case !shared && !db.mounts(r.svc, a.Volume.Path):
 		bad("%s: nothing mounts %s at %s, so the database is in the container and goes with the next deploy", at, r.svc, a.Volume.Path)
 	}
 	hc := db.health()
@@ -202,6 +225,9 @@ func (m *Manifest) agreeNeedModel(model *composeModel, app composeService, r res
 		bad("%s: no start_period: %s", at, a.Health.StartPeriod)
 	}
 	for _, name := range a.Env {
+		if shared {
+			break // each client's values are set by the platform, not by this service
+		}
 		if _, set := db.Environment[name]; !set {
 			bad("%s: the environment does not set %s, which addons/%s says the container reads", at, name, r.need.Type)
 		}

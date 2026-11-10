@@ -6,11 +6,16 @@
 // elsewhere — is answered by this file existing: an addon is `addons/<type>/addon.yml`,
 // read from the tree, so the bytes a database runs on are in the same `git log` as
 // the service that asked for it. The second, what a shared database means for a
-// restore that puts back whole volumes one service at a time, is answered by
-// refusing the question: a need is *one service's*, its volume is named after that
-// service, and two services wanting a database get two containers. Nothing here
-// can express a database two services share, which is what keeps `restore-test.sh`
-// meaning what it already meant.
+// restore that puts back whole volumes one service at a time, was answered on the
+// Japode platform by refusing the question: a need is *one service's*, its volume
+// is named after that service, and two services wanting a database get two
+// containers, which is what keeps `restore-test.sh` meaning what it already meant.
+//
+// That stays the default. A need that says `shared: <service>` (JCT5) is the other
+// shape, for a platform that does run one postgres, redis or Keycloak for several
+// products: the same addon describes it, and the platform, not the service, owns
+// its container and backs up its volume. Choosing it is choosing that platform's
+// answer to the restore question.
 //
 // Like the manifest, this renders nothing. The db container is written by hand in
 // services/<name>/docker-compose.yml, and Agree is what proves the two agree —

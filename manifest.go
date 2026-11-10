@@ -122,9 +122,15 @@ type EnvVar struct {
 // shared: `<service>-<need>` is the compose service, the volume and, with
 // `japode-` in front, the container. A database two services share is not
 // expressible here, on purpose (see tools/jcloud/addon.go).
+//
+// Shared is the other shape (JCT5): a platform service several services reach by
+// name, such as one postgres holding a database per product. Then the need names
+// that compose service, nothing is derived from the service's own name, and the
+// platform backs its volume up once rather than each service in its backup.conf.
 type Need struct {
-	Name string `yaml:"name"`
-	Type string `yaml:"type"`
+	Name   string `yaml:"name"`
+	Type   string `yaml:"type"`
+	Shared string `yaml:"shared"`
 }
 
 // A short name is a container name, a volume name, a compose service and a file
@@ -375,7 +381,7 @@ func (m *Manifest) validateNeeds() []string {
 			bad("%s.name: %q is not a short name", at, n.Name)
 		case seen[n.Name]:
 			bad("%s.name: %q is declared twice — one need, one name", at, n.Name)
-		case volumes[n.Name]:
+		case volumes[n.Name] && n.Shared == "":
 			bad("%s.name: %q is also a volume's name, and both derive the volume %s-%s", at, n.Name, m.Name, n.Name)
 		}
 		seen[n.Name] = true
@@ -384,6 +390,14 @@ func (m *Manifest) validateNeeds() []string {
 			bad("%s.type: is missing — it names the provider, addons/<type>/", at)
 		} else if !nameRE.MatchString(n.Type) {
 			bad("%s.type: %q is not a short name", at, n.Type)
+		}
+
+		switch {
+		case n.Shared == "":
+		case !nameRE.MatchString(n.Shared):
+			bad("%s.shared: %q is not a short name — it is the compose service the platform runs", at, n.Shared)
+		case n.Shared == m.Name:
+			bad("%s.shared: %q is this service itself", at, n.Shared)
 		}
 	}
 

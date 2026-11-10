@@ -222,7 +222,9 @@ func DeclaredIn(root string) (Declared, error) {
 		return d, fmt.Errorf("docker-compose.yml: %w", err)
 	}
 	for name := range compose.Services {
-		d.Others = append(d.Others, name)
+		if !contains(d.Others, name) {
+			d.Others = append(d.Others, name)
+		}
 	}
 
 	// Where the manifests sit is the platform's to say (JCT2).
@@ -253,7 +255,15 @@ func DeclaredIn(root string) (Declared, error) {
 			return d, fmt.Errorf("%s: %w", path, err)
 		}
 		for _, need := range m.Needs {
-			d.Others = append(d.Others, service+"-"+need.Name)
+			name := service + "-" + need.Name
+			if need.Shared != "" {
+				// The platform's own service (JCT5), which several manifests may
+				// name and the top-level compose file may declare too: one container.
+				name = need.Shared
+			}
+			if !contains(d.Others, name) {
+				d.Others = append(d.Others, name)
+			}
 		}
 		if m.Profile != "" {
 			if d.Profile == nil {
