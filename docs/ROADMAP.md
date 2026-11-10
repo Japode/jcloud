@@ -4,7 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-- 📋 **JCT19** (deps: —) **Japode's check script passes no compose model, so its services still go through the substring compose check** — That check passes on a commented-out line, and keeping it beside the model leaves two rules for one fact. → §JCT19
 - 📋 **JCT20** (deps: —) **agree demands an exposed port and an HTTP health path, so a service on a user network with a TCP probe cannot agree** — Every Viglet Cloud product is reached over its network and probed by TCP connect, so each would be refused on how it is reached. → §JCT20
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
