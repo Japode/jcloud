@@ -126,6 +126,10 @@ type Route struct {
 	// The body of the rendered reverse_proxy block, declared once and rendered
 	// into both this repository's route and the service's own Caddyfile.
 	Proxy []string `yaml:"proxy"`
+	// The authorisation subrequest the edge makes before proxying (JCT18): the
+	// URI of nginx's `auth_request` or of Caddy's `forward_auth`. Which upstream
+	// answers it is that upstream's own route, stated by its own manifest.
+	Gate string `yaml:"gate"`
 }
 
 type EnvVar struct {
@@ -376,6 +380,9 @@ func (m *Manifest) validateRoutes() []string {
 		}
 		if r.EnabledBy != "" && !envRE.MatchString(r.EnabledBy) {
 			bad("%s.enabled_by: %q is not a variable name, unprefixed and upper case", at, r.EnabledBy)
+		}
+		if r.Gate != "" && (!strings.HasPrefix(r.Gate, "/") || strings.ContainsAny(r.Gate, " \t")) {
+			bad("%s.gate: %q is not a URI path — it is the subrequest the edge makes, like /oauth2/auth", at, r.Gate)
 		}
 		for _, d := range r.Proxy {
 			// The rendered block goes inside `reverse_proxy … { }` in both

@@ -70,7 +70,8 @@ is the `server` whose `server_name` lists its hosts, and within it `location /`.
 compares `proxy_pass` (a `set $var` or an `upstream` block is resolved),
 `client_max_body_size` (nginx's `m` is a MiB) and `proxy_set_header`, where an empty
 value is a strip. Open-source nginx has no active health check, so `health_uri` is not
-compared. A route with `auth_request` is reported, because no manifest field states it.
+compared. A route's `auth_request` (or Caddy's `forward_auth`) is compared with the
+manifest route's `gate:`, the URI of that subrequest, in both directions.
 
 ## Installing it
 

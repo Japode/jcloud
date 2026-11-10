@@ -25,24 +25,6 @@ them), and JCT18 and JCT20 shipped here. Until it carries a jcloud.yml it is rea
 Japode layout and fails the Japode-script tests, which is the right answer for a tree
 that has not said what it is.
 
-### §JCT18 A route states its auth gate
-
-Since JCT3, agree reads an nginx route and reports an `auth_request` on it as a
-directive the manifest has no field for (route_nginx.go, proxy.Unstated). That report
-can never be cleared. On Viglet Cloud every per-client host in clients.nginx.conf runs
-`auth_request` to client-gate, and admin.viglet.cloud gates through oauth2-proxy, so
-those routes stay red whatever their manifest says.
-
-A route gains `gate:`, the URI of the authorisation subrequest (`/oauth2/auth`). Under
-nginx it is compared with the `auth_request` in force on the route's `location /`,
-inherited from the server like every other value there. Under Caddy it is compared with
-`forward_auth`, whose adapted form is a reverse_proxy handler with a rewrite to that
-URI. An absent `gate:` with a gate on the route stays the report it is today, and a
-declared gate the route does not run is a new one: the route is open to anyone.
-
-Which upstream answers the subrequest is not in the field. It is another route's
-business, and one that route's own manifest states.
-
 ### §JCT19 One compose path: the model
 
 Since JCT4, `agree --compose` reads the model `docker compose --profile '*' config

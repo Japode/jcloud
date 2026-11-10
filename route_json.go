@@ -56,13 +56,15 @@ type proxy struct {
 	DelHeader      []string
 	found          bool
 
+	// The authorisation subrequest the route makes before proxying (JCT18):
+	// nginx's `auth_request` URI, or the rewrite URI of Caddy's `forward_auth`.
+	Gate string
+
 	// What differs by kind. noHealth is an edge with no active health check to
 	// compare; placeholders turns the manifest's Caddyfile placeholders into the
-	// edge's own spelling (nil keeps Caddy's adapted one); Unstated is directives
-	// the route carries that no manifest field states.
+	// edge's own spelling (nil keeps Caddy's adapted one).
 	noHealth     bool
 	placeholders *strings.Replacer
-	Unstated     []string
 }
 
 func parseAdapted(data []byte) (map[string]*proxy, error) {
@@ -113,12 +115,22 @@ func walk(raw []json.RawMessage, p *proxy) {
 			Routes []struct {
 				Handle []json.RawMessage `json:"handle"`
 			} `json:"routes"`
+			Rewrite struct {
+				URI string `json:"uri"`
+			} `json:"rewrite"`
+			HandleResponse []json.RawMessage `json:"handle_response"`
 		}
 		if json.Unmarshal(item, &h) != nil {
 			continue
 		}
-		switch h.Handler {
-		case "reverse_proxy":
+		switch {
+		// `forward_auth` adapts to a reverse_proxy of its own, rewritten to the
+		// gate's URI and answering through handle_response (JCT18). Its upstream
+		// and headers are the gate's, so they are kept out of the route's.
+		case h.Handler == "reverse_proxy" && h.Rewrite.URI != "" && len(h.HandleResponse) > 0:
+			p.Gate = h.Rewrite.URI
+			continue
+		case h.Handler == "reverse_proxy":
 			p.found = true
 			for _, u := range h.Upstreams {
 				p.Upstreams = append(p.Upstreams, u.Dial)
@@ -129,7 +141,7 @@ func walk(raw []json.RawMessage, p *proxy) {
 				p.SetHeader[k] = v
 			}
 			p.DelHeader = append(p.DelHeader, h.Headers.Request.Delete...)
-		case "request_body":
+		case h.Handler == "request_body":
 			p.MaxSize = h.MaxSize
 		}
 		for _, nested := range h.Routes {
@@ -189,8 +201,18 @@ func (m *Manifest) agreeRouteJSON(at string, byHost map[string]*proxy) []string 
 			}
 		}
 		p = append(p, px.agreeProxy(at, r.Proxy)...)
-		for _, d := range px.Unstated {
-			bad("%s: the route runs `%s` and the manifest has no field that states it", at, d)
+
+		// The gate both ways (JCT18). One the route runs and the manifest does not
+		// state is a check nobody declared; one the manifest states and the route
+		// does not run is a route open to anyone, which is the worse of the two.
+		switch {
+		case px.Gate == r.Gate:
+		case r.Gate == "":
+			bad("%s: the route gates every request through %s and the manifest states no gate: — add gate: %s", at, px.Gate, px.Gate)
+		case px.Gate == "":
+			bad("%s: the manifest declares gate: %s and the route runs none, so it is open to anyone", at, r.Gate)
+		default:
+			bad("%s: the route gates through %s and the manifest declares gate: %s", at, px.Gate, r.Gate)
 		}
 	}
 	return p

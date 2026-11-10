@@ -31,8 +31,8 @@
 //     are not compared. That is said by the absence of the comparison and not
 //     reported as a fault: the manifest's health block is still checked against
 //     the compose healthcheck the deploy waits on.
-//   - An `auth_request` on the route is a directive the manifest has no field for,
-//     so it is reported as one the manifest does not state rather than passed over.
+//   - An `auth_request` on the route, inherited like everything else, is its gate,
+//     compared with the route's `gate:` (JCT18) both ways.
 package main
 
 import (
@@ -293,7 +293,7 @@ func nginxProxy(httpLevel, server []*ngxDirective, upstreams map[string][]string
 	}
 
 	if d := first("auth_request"); d != nil && len(d.Args) == 1 && d.Args[0] != "off" {
-		px.Unstated = append(px.Unstated, "auth_request "+d.Args[0])
+		px.Gate = d.Args[0]
 	}
 	return px
 }

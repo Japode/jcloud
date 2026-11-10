@@ -15,6 +15,7 @@
 - ✅ **JCT8** **agree puts every variable under a service-name prefix, which a shared key like OPENAI_API_KEY can never carry** — env_prefix: names a service's key prefix and shared: true a bare key many services read, held to one default and secret; jcloud.yml names .env.example (design recorded in `agree.go`).
 - ✅ **JCT9** **One product instanced per client silo needs one manifest per client, though only the host and the key differ** — instances: names per-client copies by template; agree finds each in the compose model and edge, holding it to the product's port, image, health and route (design recorded in `instances.go`).
 - ✅ **JCT10 (multi-platform contract tests)** **Contract tests read only a Japode checkout, so nothing proves a second platform still agrees after a jcloud change** — The contract tests run once per tree in a JCLOUD_PLATFORM list, each read through its own jcloud.yml; ci/check.sh mounts every tree.
+- ✅ **JCT18** **A route gated by auth_request is reported forever, since no manifest field can state the gate** — A route states gate: <uri>; agree compares it with nginx auth_request or Caddy forward_auth both ways, and a declared gate the route lacks is reported as open (design recorded in `route_json.go`).
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

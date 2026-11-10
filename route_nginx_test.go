@@ -124,7 +124,7 @@ func TestNginxDisagreements(t *testing.T) {
 		{"the strip became a set", "proxy_set_header X-View-Id \"\";", "proxy_set_header X-View-Id 1;",
 			"the route does not strip X-View-Id"},
 		{"an auth gate", "set $paste_upstream paste;", "set $paste_upstream paste;\n        auth_request /oauth2/auth;",
-			"the route runs `auth_request /oauth2/auth`"},
+			"the route gates every request through /oauth2/auth and the manifest states no gate"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
