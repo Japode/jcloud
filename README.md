@@ -81,7 +81,7 @@ Each `v*` tag is a release. Pick one of three ways to run it:
   [Releases](https://github.com/Japode/jcloud/releases), check it against `checksums.txt`,
   and put `jcloud` on your `PATH`. Linux, macOS and Windows, amd64 and arm64.
 - **With Go**: `go install github.com/Japode/jcloud@latest`, or a fixed version with
-  `go run github.com/Japode/jcloud@v0.2.0 check japode.yml`.
+  `go run github.com/Japode/jcloud@v0.3.0 check japode.yml`.
 - **What the platform does**: it pins the tag and builds it inside a Go image pinned by
   digest, so nothing is installed on the host.
 
