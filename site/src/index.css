@@ -401,6 +401,64 @@ section {
   font-weight: 700;
 }
 
+/* Install: two short ways side by side, the CI step under them at full width */
+.ways {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+@media (max-width: 900px) {
+  .ways {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.way {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--vg-border);
+  border-radius: 14px;
+  padding: 24px;
+  background: color-mix(in oklab, var(--vg-foreground) 3%, transparent);
+  min-width: 0;
+}
+.way-wide {
+  grid-column: 1 / -1;
+}
+.way h3 {
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+.way > p {
+  color: var(--vg-muted-foreground);
+  line-height: 1.6;
+}
+.way .way-note {
+  font-size: 0.86rem;
+}
+.way-action {
+  margin-top: auto;
+}
+.snippet {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+  background: var(--term);
+  border: 1px solid var(--term-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.snippet .code {
+  flex: 1;
+  min-width: 0;
+}
+.install .window .pane-label {
+  align-items: center;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .hero-stage figcaption {
   margin-top: 12px;
   font-size: 0.84rem;

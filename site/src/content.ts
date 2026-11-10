@@ -28,6 +28,36 @@ export const pageHref = (lang: Lang) => (lang === "en" ? BASE : `${BASE}pt/`);
 // `releases/latest` is the one release link that cannot go stale on the next `v*` tag.
 export const releasesUrl = `${repoUrl}/releases/latest`;
 
+/** The newest release, from git at build time (vite.config.ts), with and without its "v". */
+export const tag = __JCLOUD_TAG__;
+const version = tag.replace(/^v/, "");
+
+/**
+ * The install commands, all naming the same release. Each was run as written before it was
+ * put here: the archive name is GoReleaser's (`jcloud_<version>_<os>_<arch>`), the archive
+ * holds `jcloud` at its root, and `sha256sum -c` passes against the release's checksums.txt.
+ */
+export const install = {
+  go: `go install github.com/Japode/jcloud@${tag}`,
+  ci: `name: manifest
+on: [push, pull_request]
+jobs:
+  japode-yml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: jcloud check --repo
+        env:
+          V: ${version}
+        run: |
+          A=jcloud_\${V}_linux_amd64.tar.gz
+          curl -fsSLO "https://github.com/Japode/jcloud/releases/download/v$V/$A"
+          curl -fsSL "https://github.com/Japode/jcloud/releases/download/v$V/checksums.txt" | grep " $A\\$" | sha256sum -c
+          tar -xzf "$A" jcloud
+          ./jcloud check --repo . --repository \${{ github.repository }} japode.yml`,
+  platforms: ["Linux", "macOS", "Windows"].map((os) => `${os} · amd64, arm64`),
+};
+
 /** One printed line, and how jcloud coloured it: see site/scripts/capture.mjs. */
 export type TermLine = { kind: "ok" | "err" | "out" | "annotation" | "blank"; text: string };
 export type Run = { cwd: string; cmd: string; exit: number; lines: TermLine[] };
@@ -86,6 +116,15 @@ type Words = {
     title: string;
     lead: string;
     places: { name: string; where: string; files: string[]; verbs: string[] }[];
+  };
+  install: {
+    eyebrow: string;
+    title: string;
+    lead: (tag: string) => string;
+    binary: { title: string; body: string; cta: string; checksums: string };
+    go: { title: string; body: string };
+    ci: { title: string; body: string; file: string };
+    copy: { label: (what: string) => string; copy: string; copied: string };
   };
   footer: { links: { href: string; label: string }[]; disclaimer: string };
 };
@@ -191,6 +230,27 @@ export const words: Record<Lang, Words> = {
           verbs: ["survey"],
         },
       ],
+    },
+    install: {
+      eyebrow: "Install",
+      title: "One binary, three ways to get it",
+      lead: (t) => `The current release is ${t}. Every way below installs that one.`,
+      binary: {
+        title: "Download a binary",
+        body: "Take the archive for your system from the release, check it against checksums.txt, and put jcloud on your PATH.",
+        cta: "Open the release",
+        checksums: "Each archive is listed with its SHA-256 in checksums.txt.",
+      },
+      go: {
+        title: "Install with Go",
+        body: "Any Go toolchain new enough for go.mod builds it from source.",
+      },
+      ci: {
+        title: "Run it in GitHub Actions",
+        body: "Where jcloud earns its keep: in the service's own repository, so the commit that moves a port without the manifest fails in front of whoever made it. The step downloads the release, checks it, and runs check --repo.",
+        file: ".github/workflows/manifest.yml",
+      },
+      copy: { label: (what) => `Copy ${what}`, copy: "Copy", copied: "Copied" },
     },
     footer: {
       links: [
@@ -300,6 +360,27 @@ export const words: Record<Lang, Words> = {
           verbs: ["survey"],
         },
       ],
+    },
+    install: {
+      eyebrow: "Instalar",
+      title: "Um binário, três jeitos de obtê-lo",
+      lead: (t) => `A versão atual é a ${t}. Todos os jeitos abaixo instalam essa versão.`,
+      binary: {
+        title: "Baixar um binário",
+        body: "Pegue no release o arquivo do seu sistema, confira com o checksums.txt e coloque o jcloud no PATH.",
+        cta: "Abrir o release",
+        checksums: "Cada arquivo aparece com seu SHA-256 no checksums.txt.",
+      },
+      go: {
+        title: "Instalar com Go",
+        body: "Qualquer toolchain Go nova o bastante para o go.mod compila a partir do código.",
+      },
+      ci: {
+        title: "Rodar no GitHub Actions",
+        body: "É onde o jcloud mais vale: no repositório do próprio serviço, para que o commit que muda uma porta sem mudar o manifesto falhe na frente de quem o fez. O passo baixa o release, confere o checksum e roda o check --repo.",
+        file: ".github/workflows/manifest.yml",
+      },
+      copy: { label: (what) => `Copiar ${what}`, copy: "Copiar", copied: "Copiado" },
     },
     footer: {
       links: [

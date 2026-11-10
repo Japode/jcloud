@@ -19,6 +19,12 @@ npm run build      # tsc, client, SSR, then the prerender of both pages
 npm run preview    # serve the built dist/
 ```
 
+The build reads the newest `v*` tag from git (`vite.config.ts`, `__JCLOUD_TAG__`), and
+every install command on the page names that release, so no version is written in the
+source. A checkout with no tags fails the build rather than publishing a command for a
+version that does not exist. The CI step on the page was run as written, against the
+release, before it was put there: if GoReleaser's archive names change, run it again.
+
 `npm run build` is the gate. The prerender writes each language's page with its own title,
 description, canonical, `<html lang>` and hreflang links, by replace-or-throw, so a template
 that lost an anchor fails the build.

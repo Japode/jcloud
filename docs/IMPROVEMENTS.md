@@ -168,17 +168,6 @@ after every jcloud change.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-### §JCT13 JCT13 — install and the CI step
-
-The README's three ways to install (a release archive, `go install`, the pinned build
-the platform does) are the call to action and belong on the page, with the GitHub
-Actions use that is jcloud's main home: a step that runs `jcloud agree` and fails the
-PR.
-
-The release link points at `releases/latest`, never a fixed tag, so the page does not go
-stale on each `v*` tag. The version shown, if any, is read at build time from the latest
-tag, not written in `content.ts`.
-
 ### §JCT14 JCT14 — the Pages workflow
 
 Revelei's `.github/workflows/site.yml` is the template: the build is the gate on every

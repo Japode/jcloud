@@ -2,6 +2,7 @@ import type { Lang } from "./content";
 import { LangContext } from "./i18n";
 import { Footer, Nav } from "./components/Chrome";
 import { Hero } from "./components/Hero";
+import { Install } from "./components/Install";
 import { Shape } from "./components/Shape";
 import { Verbs } from "./components/Verbs";
 
@@ -15,6 +16,7 @@ export function App({ lang }: Readonly<{ lang: Lang }>) {
         <Hero />
         <Verbs />
         <Shape />
+        <Install />
       </main>
       <Footer />
     </LangContext.Provider>
