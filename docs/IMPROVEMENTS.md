@@ -54,10 +54,15 @@ go through the substring path, which passes on a commented-out line.
 Measured on 2026-11-10: the model built from the top-level docker-compose.yml plus every
 services/*/docker-compose.yml, joined with `-f` the way scripts/deploy.sh joins them,
 agrees for all three Japode services and both their databases. So the change is in the
-platform's script: build that model beside caddy-adapt.json and pass it with
-`--compose`. jcloud then reports an absent model the way it reports absent routes ("not
-supplied, so unchecked"), and the textual compose and needs checks are deleted, leaving
-one code path.
+platform's script: build that model into .deploy-state/compose-config.json (the path
+platform_test.go reads) and pass it with `--compose`. jcloud then reports an absent
+model the way it reports absent routes ("not supplied, so unchecked"), and the textual
+compose and needs checks are deleted, leaving one code path.
+
+The same script edit passes `-e GITHUB_ACTIONS` to go_run's `docker run`. Since JCT17
+jcloud prints annotations only when that variable is "true", and the container starts
+without it, so the platform's CI loses them at the first pin bump past JCT17 unless it
+is passed through.
 
 The two repositories land in order: the platform script first, then the jcloud release
 that drops the fallback, or the platform's CI turns red on a model it never built.
@@ -88,19 +93,3 @@ probes and still pass the stricter reading.
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on
-
-### §JCT17 JCT17 — when the ::error annotations are printed
-
-README.md says "inside GitHub Actions each one is also printed as an `::error file=…::`
-annotation". jcloud prints them everywhere: main.go (check and compare), up.go and
-survey.go call `fmt.Printf("::error…")` with no condition, and nothing reads
-`GITHUB_ACTIONS`. Seen on 2026-11-10 running `jcloud check` in a Windows terminal, and
-in every transcript `site/scripts/capture.sh` recorded in a plain container.
-
-Either the README describes what happens, or jcloud prints the annotations only when
-`GITHUB_ACTIONS=true`. The second halves what a person reads locally, where each problem
-appears twice. It changes the output a caller may parse, so it is also a change to the
-product page's transcripts, which are captured again with the release that ships it.
-
-Decide which, then make the README and the binary say the same thing; a test pins the
-behaviour on both sides of the variable if the binary changes.

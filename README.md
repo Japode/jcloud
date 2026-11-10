@@ -31,7 +31,9 @@ jcloud version
 
 Exit codes: `0` everything checked passed, `1` something was refused, `2` the arguments
 were wrong. Problems are reported all at once, and inside GitHub Actions each one is also
-printed as an `::error file=…::` annotation.
+printed as an `::error file=…::` annotation. jcloud prints annotations only when
+`GITHUB_ACTIONS=true`. A step that runs it in a container passes the variable through
+(`docker run -e GITHUB_ACTIONS …`).
 
 ## Another platform's layout
 

@@ -435,8 +435,8 @@ func report(prof *Profile, r Readiness, envPath string) bool {
 	for _, key := range r.Missing {
 		fmt.Fprintf(os.Stderr, "      %s is declared and not in %s — add it to the SERVICES_ENV secret\n", key, filepath.Base(envPath))
 		// On the diff where somebody can act on it, the way check-layout.sh does.
-		fmt.Printf("::error::%s is declared by %s and missing from the configuration\n",
-			key, filepath.ToSlash(prof.ManifestPath(r.Service)))
+		annotate("error", "", fmt.Sprintf("%s is declared by %s and missing from the configuration",
+			key, filepath.ToSlash(prof.ManifestPath(r.Service))))
 	}
 	if r.Pinned == "" && r.Built == "" {
 		reportUnpinned(prof, r)

@@ -352,7 +352,7 @@ func survey(args []string) int {
 
 	for _, d := range divergences {
 		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s %s\n", d.Service, d.Says)
-		fmt.Printf("::error::%s %s\n", d.Service, d.Says)
+		annotate("error", "", d.Service+" "+d.Says)
 	}
 	fmt.Fprintf(os.Stderr, "\n\033[31m%d divergence(s) between this repository and the server\033[0m\n", len(divergences))
 	return 1

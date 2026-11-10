@@ -301,7 +301,7 @@ func compareManifests(oursPath, theirsPath string) int {
 		fmt.Fprintf(os.Stderr, "      %s\n", problem)
 		// Annotated against our copy: this runs in this repository, and the file
 		// a reviewer here can actually change is this one.
-		fmt.Printf("::error file=%s::%s\n", oursPath, problem)
+		annotate("error", oursPath, problem)
 	}
 	fmt.Fprintf(os.Stderr, "\n\033[31mthe two copies of the manifest disagree\033[0m\n")
 	return 1
@@ -342,7 +342,7 @@ func run(paths []string, compare func(*Manifest) ([]string, []string), what, wha
 		say := func() {
 			for _, note := range notes {
 				fmt.Printf("      \033[33m!\033[0m %s\n", note)
-				fmt.Printf("::warning file=%s::%s\n", path, note)
+				annotate("warning", path, note)
 			}
 		}
 		if len(problems) == 0 {
@@ -358,9 +358,9 @@ func run(paths []string, compare func(*Manifest) ([]string, []string), what, wha
 		for _, problem := range problems {
 			fmt.Fprintf(os.Stderr, "      %s\n", problem)
 			// A GitHub annotation puts the message on the diff, which is the
-			// point of checking here rather than on the server. It degrades to
-			// an ordinary line outside Actions.
-			fmt.Printf("::error file=%s::%s\n", path, problem)
+			// point of checking here rather than on the server. Inside Actions
+			// only (annotate.go): elsewhere it was each problem twice.
+			annotate("error", path, problem)
 		}
 		say()
 		bad++

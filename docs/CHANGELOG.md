@@ -27,3 +27,4 @@
 ## Block D — What jcloud prints: a report a reader can act on
 
 - ✅ **JCT16** **compare reports every line between two distant differences, so a port and one new variable print some 60 lines** — compare diffs the two canonical renderings by longest common subsequence, so a port and one new variable print 8 lines, each named by its field (design recorded in `compare.go`).
+- ✅ **JCT17** **The README says ::error annotations are printed inside GitHub Actions, and jcloud prints them everywhere** — jcloud prints ::error and ::warning annotations only when GITHUB_ACTIONS is true, so a terminal shows each problem once; the README says so (design recorded in `annotate.go`).

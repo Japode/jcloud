@@ -12,8 +12,6 @@
 
 ## Block D — What jcloud prints: a report a reader can act on
 
-- 💭 **JCT17** (deps: —) **The README says ::error annotations are printed inside GitHub Actions, and jcloud prints them everywhere** — Local output repeats every problem twice, and a reader of the README expects a terminal to show each once. → §JCT17
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
