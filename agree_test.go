@@ -241,7 +241,7 @@ func TestRouteDisagreements(t *testing.T) {
 	}{
 		{"the block is commented out, so nothing answers for the host",
 			`{"match":[{"host":["paste.example.com"]}],`, `{"match":[{"host":["other.example.com"]}],`,
-			"nothing in the adapted config answers for paste.example.com"},
+			"nothing in the route configuration answers for paste.example.com"},
 		{"proxies to another port",
 			`"dial":"paste:8080"`, `"dial":"paste:8081"`,
 			"proxies to [paste:8081], and the manifest declares paste:8080"},
@@ -358,7 +358,7 @@ func TestSecondRouteHostsKeyIsDeclared(t *testing.T) {
 	if got := m.hostsVar(m.Routes[1]); got != "PASTE_CONTENT_HOSTS" {
 		t.Fatalf("hostsVar for the content route = %q, want PASTE_CONTENT_HOSTS", got)
 	}
-	if p := strings.Join(m.orphanEnvKeys(".env.example",
+	if p := strings.Join(m.orphanEnvKeys(DefaultProfile(), ".env.example",
 		"PASTE_HOSTS=x\nPASTE_CONTENT_HOSTS=y\nPASTE_SITE_URL=z\n"), "\n"); p != "" {
 		t.Fatalf("both hosts keys are declared by routes; got:\n%s", p)
 	}

@@ -2,7 +2,7 @@
 //
 //	jcloud check [--repo <root> [--repository <owner/name>]
 //	             [--dockerfile <path>] [--caddyfile <path>]] <japode.yml> …
-//	jcloud agree [--adapted <caddy-adapt.json>] <root> <japode.yml> …
+//	jcloud agree [--routes <caddy-adapt.json | nginx-T.txt>] <root> <japode.yml> …
 //	jcloud compare <ours.yml> <theirs.yml>
 //	jcloud env <verb> …
 //
@@ -77,14 +77,16 @@ func main() {
 		// another repository will not have the two in the same place.
 		rest := args[1:]
 		adapted := ""
-		if len(rest) >= 2 && rest[0] == "--adapted" {
+		if len(rest) >= 2 && (rest[0] == "--routes" || rest[0] == "--adapted") {
 			// A file and not a command to run: this build shells out to nothing,
-			// and `caddy adapt` belongs to the script that already has a pinned
-			// caddy image. See tools/jcloud/route_json.go for why it is read at all.
+			// and `caddy adapt` or `nginx -T` belongs to the script that already
+			// has a pinned image of the edge. route_json.go says why it is read at
+			// all. --adapted is the spelling from before nginx (JCT3), kept so a
+			// platform script written against it still runs.
 			adapted, rest = rest[1], rest[2:]
 		}
 		if len(rest) < 2 {
-			fmt.Fprintln(os.Stderr, "jcloud agree [--adapted <caddy-adapt.json>] <repository-root> <japode.yml> …")
+			fmt.Fprintln(os.Stderr, "jcloud agree [--routes <caddy-adapt.json | nginx-T.txt>] <repository-root> <japode.yml> …")
 			os.Exit(2)
 		}
 		os.Exit(agree(rest[1:], rest[0], adapted))
@@ -139,8 +141,11 @@ func usage() {
        [--caddyfile <path>]            paths are relative to <root> and default
        <japode.yml> …                  to that file's name in it
   jcloud agree <root> <japode.yml> …   that, and then compare it against the
-                                       compose file, the route, backup.conf and
-                                       .env.example deployed beside it
+       [--routes <path>]               compose file, the route, backup.conf and
+                                       .env.example deployed beside it. The
+                                       route is read from --routes: caddy adapt
+                                       JSON, or nginx -T when jcloud.yml says
+                                       route.kind: nginx
   jcloud compare <ours> <theirs>       report where this repository's copy of a
                                        manifest and the service's own disagree
   jcloud survey [--root <dir>]         the server, as scripts/survey-server.sh

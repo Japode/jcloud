@@ -45,7 +45,8 @@ type adaptedRoute struct {
 }
 
 // proxy is what one route's reverse_proxy handler says, flattened out of the
-// subroute nesting Caddy produces.
+// subroute nesting Caddy produces — or, for an nginx edge, out of the server and
+// location blocks route_nginx.go reads (JCT3).
 type proxy struct {
 	Upstreams      []string
 	HealthURI      string
@@ -54,6 +55,14 @@ type proxy struct {
 	SetHeader      map[string][]string
 	DelHeader      []string
 	found          bool
+
+	// What differs by kind. noHealth is an edge with no active health check to
+	// compare; placeholders turns the manifest's Caddyfile placeholders into the
+	// edge's own spelling (nil keeps Caddy's adapted one); Unstated is directives
+	// the route carries that no manifest field states.
+	noHealth     bool
+	placeholders *strings.Replacer
+	Unstated     []string
 }
 
 func parseAdapted(data []byte) (map[string]*proxy, error) {
@@ -149,7 +158,7 @@ func (m *Manifest) agreeRouteJSON(at string, byHost map[string]*proxy) []string 
 		for _, h := range r.Hosts {
 			got, ok := byHost[h]
 			if !ok {
-				bad("%s: nothing in the adapted config answers for %s — is that block commented out?", at, h)
+				bad("%s: nothing in the route configuration answers for %s — is that block commented out?", at, h)
 				continue
 			}
 			if px != nil && px != got {
@@ -168,17 +177,8 @@ func (m *Manifest) agreeRouteJSON(at string, byHost map[string]*proxy) []string 
 		if len(px.Upstreams) != 1 || px.Upstreams[0] != want {
 			bad("%s: proxies to %v, and the manifest declares %s", at, px.Upstreams, want)
 		}
-		if px.HealthURI != m.Health.Path {
-			bad("%s: health_uri is %q, and the manifest declares %q — the edge would take an upstream out of rotation on a different path than the deploy waits on",
-				at, px.HealthURI, m.Health.Path)
-		}
-		// Caddy stores the interval in nanoseconds. Compared because it was in the
-		// route and in no schema, so nothing noticed it changing.
-		if want, err := nanosOf(m.Health.interval()); err != nil {
-			bad("%s: %v", at, err)
-		} else if px.HealthInterval != want {
-			bad("%s: health_interval is %s, and the manifest declares %s",
-				at, humanNanos(px.HealthInterval), m.Health.interval())
+		if !px.noHealth {
+			p = append(p, px.agreeHealth(at, m)...)
 		}
 		if r.MaxBody != "" {
 			switch n, err := bytesOf(r.MaxBody); {
@@ -189,6 +189,28 @@ func (m *Manifest) agreeRouteJSON(at string, byHost map[string]*proxy) []string 
 			}
 		}
 		p = append(p, px.agreeProxy(at, r.Proxy)...)
+		for _, d := range px.Unstated {
+			bad("%s: the route runs `%s` and the manifest has no field that states it", at, d)
+		}
+	}
+	return p
+}
+
+// agreeHealth compares the edge's active health check, which Caddy has and
+// open-source nginx does not.
+func (px *proxy) agreeHealth(at string, m *Manifest) []string {
+	var p []string
+	if px.HealthURI != m.Health.Path {
+		p = append(p, fmt.Sprintf("%s: health_uri is %q, and the manifest declares %q — the edge would take an upstream out of rotation on a different path than the deploy waits on",
+			at, px.HealthURI, m.Health.Path))
+	}
+	// Caddy stores the interval in nanoseconds. Compared because it was in the
+	// route and in no schema, so nothing noticed it changing.
+	if want, err := nanosOf(m.Health.interval()); err != nil {
+		p = append(p, fmt.Sprintf("%s: %v", at, err))
+	} else if px.HealthInterval != want {
+		p = append(p, fmt.Sprintf("%s: health_interval is %s, and the manifest declares %s",
+			at, humanNanos(px.HealthInterval), m.Health.interval()))
 	}
 	return p
 }
@@ -255,15 +277,22 @@ func (px *proxy) agreeProxy(at string, directives []string) []string {
 			bad("%s: the route does not set %s, which the manifest declares", at, name)
 			continue
 		}
-		// The Caddyfile placeholder and the JSON one are two spellings of one
+		// The Caddyfile placeholder and the edge's are two spellings of one
 		// thing, and the manifest is written in the Caddyfile's.
-		want := strings.ReplaceAll(strings.Join(f[2:], " "), "{remote_host}", "{http.request.remote.host}")
+		spell := px.placeholders
+		if spell == nil {
+			spell = caddyPlaceholders
+		}
+		want := spell.Replace(strings.Join(f[2:], " "))
 		if !contains(values, want) {
 			bad("%s: %s is set to %v, and the manifest declares %s", at, name, values, want)
 		}
 	}
 	return p
 }
+
+// Caddy's adapted spelling of the one placeholder any manifest uses.
+var caddyPlaceholders = strings.NewReplacer("{remote_host}", "{http.request.remote.host}")
 
 func contains(haystack []string, needle string) bool {
 	for _, s := range haystack {

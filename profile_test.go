@@ -83,7 +83,7 @@ func TestABadProfileIsRefusedWhole(t *testing.T) {
 manifest: services/*/{name}.yml
 route:
   path: /etc/nginx/site.conf
-  kind: nginx
+  kind: traefik
 image_var: IMAGE
 pin_file: ../state/images.env
 addon: addons/addon.yml
@@ -94,7 +94,7 @@ addon: addons/addon.yml
 	for _, want := range []string{
 		"{name} is its only wildcard",
 		"route.path is \"/etc/nginx/site.conf\", and a path here is relative",
-		"route.kind is \"nginx\"",
+		"route.kind is \"traefik\"",
 		"image_var is \"IMAGE\"",
 		"pin_file is \"../state/images.env\", which leaves the platform root",
 		"addon is \"addons/addon.yml\"",
@@ -207,7 +207,7 @@ func TestAProfiledNeedAgrees(t *testing.T) {
 // A profile that cannot be read is the one answer agree gives, rather than every
 // file reported missing from a layout nobody declared.
 func TestAnUnreadableProfileIsTheOneAnswer(t *testing.T) {
-	root := layTree(t, map[string]string{"jcloud.yml": "route:\n  kind: nginx\n"})
+	root := layTree(t, map[string]string{"jcloud.yml": "route:\n  kind: traefik\n"})
 	m, err := Parse([]byte(fixtureManifest))
 	if err != nil {
 		t.Fatal(err)

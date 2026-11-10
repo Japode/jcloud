@@ -83,20 +83,27 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, adaptedConfig []byte) []s
 		p = append(p, m.agreeNeeds(at, compose, needs, prof)...)
 	}
 	routeRel := filepath.ToSlash(prof.RouteFile(m.Name))
-	if route, ok := read(prof.RouteFile(m.Name)); ok {
-		// Only the source-level assertion stays textual: whether the address block
-		// reads {$SVC_HOSTS:…} is a fact about the file, and `caddy adapt` has
-		// already resolved that away into the default it carries.
-		p = append(p, m.agreeRouteSource(routeRel, route)...)
+	// Only Caddy's source is read. Whether the address block reads {$SVC_HOSTS:…}
+	// is a fact about that file, and `caddy adapt` has already resolved it away
+	// into the default it carries. An nginx edge states its hosts in server_name,
+	// which the configuration below already carries (JCT3).
+	if prof.RouteKind == "caddy" {
+		if route, ok := read(prof.RouteFile(m.Name)); ok {
+			p = append(p, m.agreeRouteSource(routeRel, route)...)
+		}
+	}
+	parse, produce := parseAdapted, "scripts/check-jcloud.sh runs `caddy adapt` and passes it"
+	if prof.RouteKind == "nginx" {
+		parse, produce = parseNginxRoutes, "the platform's script runs `nginx -T` and passes it with --routes"
 	}
 	switch {
 	// len and not nil: an empty file is as much "nobody adapted this" as a nil
-	// slice is, and handing "" to the JSON parser reports a malformed config for
-	// what is really a missing one.
+	// slice is, and handing "" to the parser reports a malformed config for what
+	// is really a missing one.
 	case len(adaptedConfig) == 0:
-		bad("%s: the adapted configuration was not supplied, so what this route means is unchecked — scripts/check-jcloud.sh runs `caddy adapt` and passes it", routeRel)
+		bad("%s: the %s configuration was not supplied, so what this route means is unchecked — %s", routeRel, prof.RouteKind, produce)
 	default:
-		byHost, err := parseAdapted(adaptedConfig)
+		byHost, err := parse(adaptedConfig)
 		if err != nil {
 			bad("%s: %v", routeRel, err)
 		} else {
@@ -114,7 +121,7 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, adaptedConfig []byte) []s
 		bad("%s: the manifest declares sqlite or exclude paths, or a need whose provider asks for a directive, and this file is not there", confRel)
 	}
 	if env, ok := read(".env.example"); ok {
-		p = append(p, m.agreeEnvExample(".env.example", env)...)
+		p = append(p, m.agreeEnvExample(prof, ".env.example", env)...)
 	}
 	return p
 }
@@ -163,6 +170,20 @@ func (m *Manifest) hostsVar(r Route) string {
 		return m.SCREAM() + "_HOSTS"
 	}
 	return m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
+}
+
+// hostsKeys is every hosts variable the configuration has to carry. Only a Caddy
+// edge reads one: an nginx edge names its hosts in server_name, so under it the key
+// is one nothing reads, and requiring it would send somebody to set it (JCT3).
+func (m *Manifest) hostsKeys(prof *Profile) []string {
+	if prof.RouteKind != "caddy" {
+		return nil
+	}
+	var keys []string
+	for _, r := range m.Routes {
+		keys = append(keys, m.hostsVar(r))
+	}
+	return keys
 }
 
 func (m *Manifest) agreeCompose(at, body string, prof *Profile) []string {
@@ -355,7 +376,7 @@ func (m *Manifest) declares(kind, key, path string) bool {
 	return false
 }
 
-func (m *Manifest) agreeEnvExample(at, body string) []string {
+func (m *Manifest) agreeEnvExample(prof *Profile, at, body string) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -377,14 +398,13 @@ func (m *Manifest) agreeEnvExample(at, body string) []string {
 		}
 	}
 
-	for _, r := range m.Routes {
-		key := m.hostsVar(r)
+	for _, key := range m.hostsKeys(prof) {
 		if !has(key) {
 			bad("%s: no %s=, so the addresses this route answers for cannot be changed without editing the route", at, key)
 		}
 	}
 
-	p = append(p, m.orphanEnvKeys(at, body)...)
+	p = append(p, m.orphanEnvKeys(prof, at, body)...)
 	return p
 }
 
@@ -400,7 +420,7 @@ func (m *Manifest) agreeEnvExample(at, body string) []string {
 // nothing about what any other service or the edge does, so `ACME_EMAIL` and
 // `BACKUP_*` are not its business. Two services cannot collide here either: the
 // prefix ends in `_`, so `SKILL_` is not a prefix of `SKILLGIST_HOSTS`.
-func (m *Manifest) orphanEnvKeys(at, body string) []string {
+func (m *Manifest) orphanEnvKeys(prof *Profile, at, body string) []string {
 	var p []string
 
 	prefix := m.SCREAM() + "_"
@@ -411,8 +431,8 @@ func (m *Manifest) orphanEnvKeys(at, body string) []string {
 	for _, e := range m.Env {
 		known[prefix+e.Name] = true
 	}
-	for _, r := range m.Routes {
-		known[m.hostsVar(r)] = true
+	for _, k := range m.hostsKeys(prof) {
+		known[k] = true
 	}
 
 	key := regexp.MustCompile(`^([A-Z][A-Z0-9_]*)=`)

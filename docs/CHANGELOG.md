@@ -7,6 +7,7 @@
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
 - ✅ **JCT2** **jcloud reads only the Japode tree: manifest glob, route path, container prefix and pin file are constants** — jcloud.yml at a platform root names its manifest, route, container, image variable, pin file, deploy and addon paths; absent, jcloud reads the Japode layout (design recorded in `profile.go`).
+- ✅ **JCT3** **Routes agree only with Caddy, so an nginx edge such as the Viglet Cloud cloud-frontend cannot be checked at all** — agree --routes reads nginx -T on a route.kind nginx platform: server_name, proxy_pass via set or upstream, body size, headers; hosts keys are Caddy's (design recorded in `route_nginx.go`).
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

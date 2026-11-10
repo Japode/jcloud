@@ -21,7 +21,7 @@ func parseValid(t *testing.T) *Manifest {
 // and a variable with a fixed `value:` is not configuration at all.
 func TestRequiredEnvIsWhatTheSecretHasToCarry(t *testing.T) {
 	m := parseValid(t)
-	required, _ := RequiredEnv(m)
+	required, _ := RequiredEnv(DefaultProfile(), m)
 	for _, want := range []string{m.SCREAM() + "_HOSTS"} {
 		if !contains(required, want) {
 			t.Fatalf("%s is not required, and a route reads its hosts from it: %v", want, required)
@@ -42,7 +42,7 @@ func TestAFixedValueIsNotMissing(t *testing.T) {
 	m := parseValid(t)
 	m.Env = append(m.Env, EnvVar{Name: "PINNED_THING", Value: &fixed})
 
-	required, fixedKeys := RequiredEnv(m)
+	required, fixedKeys := RequiredEnv(DefaultProfile(), m)
 	key := m.SCREAM() + "_PINNED_THING"
 	if contains(required, key) {
 		t.Fatalf("%s is required and the manifest fixes its value", key)
@@ -79,7 +79,7 @@ func TestAFixedValueSetAnywayIsReportedAndDoesNotBlock(t *testing.T) {
 // command exists to close.
 func TestEveryMissingKeyIsNamedAtOnce(t *testing.T) {
 	m := parseValid(t)
-	required, _ := RequiredEnv(m)
+	required, _ := RequiredEnv(DefaultProfile(), m)
 	if len(required) < 2 {
 		t.Fatalf("the fixture declares %d key(s), which is too few to test this", len(required))
 	}
@@ -291,7 +291,7 @@ func TestTheDeployCommandNamesTheVariablesTheDeployReads(t *testing.T) {
 // about one missing thing is not quietly about several.
 func everyRequiredKey(t *testing.T, m *Manifest) string {
 	t.Helper()
-	required, _ := RequiredEnv(m)
+	required, _ := RequiredEnv(DefaultProfile(), m)
 	var b strings.Builder
 	for _, key := range required {
 		b.WriteString(key + "=value\n")

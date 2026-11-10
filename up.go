@@ -96,8 +96,9 @@ func digestOf(ref string) string {
 // template is prose a person maintains and the manifest is the declaration `jcloud
 // agree` already holds it to. The two rules are agree.go's own and are not restated:
 // a variable with a fixed `value:` is not configuration and must not be set, and a
-// route's hosts variable is named by hostsVar.
-func RequiredEnv(m *Manifest) (required, fixed []string) {
+// route's hosts variable is named by hostsVar, and only a Caddy edge reads one
+// (hostsKeys).
+func RequiredEnv(prof *Profile, m *Manifest) (required, fixed []string) {
 	for _, e := range m.Env {
 		key := m.SCREAM() + "_" + e.Name
 		if e.Value != nil {
@@ -106,9 +107,7 @@ func RequiredEnv(m *Manifest) (required, fixed []string) {
 		}
 		required = append(required, key)
 	}
-	for _, r := range m.Routes {
-		required = append(required, m.hostsVar(r))
-	}
+	required = append(required, m.hostsKeys(prof)...)
 	return required, fixed
 }
 
@@ -222,7 +221,7 @@ func Assess(prof *Profile, m *Manifest, keys map[string]bool, imagesEnv string, 
 			r.Unpublished = pub.why(m.Name)
 		}
 	}
-	required, fixed := RequiredEnv(m)
+	required, fixed := RequiredEnv(prof, m)
 	for _, key := range required {
 		if !keys[key] {
 			r.Missing = append(r.Missing, key)

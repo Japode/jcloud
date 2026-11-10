@@ -82,8 +82,9 @@ type profileFile struct {
 	Addon           *string `yaml:"addon"`
 }
 
-// routeKinds is every route grammar this build can read. One, until JCT3.
-var routeKinds = []string{"caddy"}
+// routeKinds is every route grammar this build can read: Caddy through `caddy
+// adapt` (route_json.go), nginx through `nginx -T` (route_nginx.go, JCT3).
+var routeKinds = []string{"caddy", "nginx"}
 
 // LoadProfile reads root/jcloud.yml, or answers the Japode layout when there is
 // none. Any other read failure is an error: a profile that exists and cannot be
@@ -165,7 +166,10 @@ func (p *Profile) Validate() []string {
 			bad("manifest is %q, and {name} is its only wildcard", p.Manifest)
 		}
 	}
-	if relative("route.path", p.RoutePath) && !strings.Contains(p.RoutePath, "{name}") {
+	// A Caddy route is one file per service, read for its {$SVC_HOSTS:…} source.
+	// An nginx edge is usually one configuration for every host, and only its
+	// `nginx -T` output is read, so its path names where that lives and nothing more.
+	if relative("route.path", p.RoutePath) && p.RouteKind == "caddy" && !strings.Contains(p.RoutePath, "{name}") {
 		bad("route.path is %q and does not name {name}, so every service would share one route", p.RoutePath)
 	}
 	known := false

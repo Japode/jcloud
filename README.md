@@ -12,9 +12,10 @@ from [`site/`](site/README.md)).
 jcloud check <japode.yml> …                     validate a manifest
 jcloud check --repo <root> [--repository o/n]   …and compare it against the service's
       [--dockerfile p] [--caddyfile p] <yml> …  own repository
-jcloud agree [--adapted caddy.json] <root> <yml> …
-                                                …and compare it against the platform
-                                                files deployed beside it
+jcloud agree [--routes <file>] <root> <yml> …    …and compare it against the platform
+                                                files deployed beside it; the route
+                                                is read from `caddy adapt` JSON or
+                                                `nginx -T` output
 jcloud compare <ours.yml> <theirs.yml>          where two copies of a manifest disagree
 jcloud survey [--root <dir>] <observations>     the server as observed, against what
                                                 services/*/ declares
@@ -37,8 +38,8 @@ at its root saying where they are. Every key is optional and defaults to the val
 ```yaml
 manifest: services/{name}/japode.yml   # compose file and backup.conf sit beside it
 route:
-  path: caddy/sites/{name}.caddy
-  kind: caddy                          # the only kind this build reads
+  path: caddy/sites/{name}.caddy       # nginx: one file for every host, no {name}
+  kind: caddy                          # or nginx
 container_prefix: japode-
 image_var: "{NAME}_IMAGE"              # {NAME}: the short name, upper case, - as _
 pin_file: .deploy-state/images.env
@@ -48,6 +49,13 @@ addon: addons/{type}/addon.yml
 
 jcloud refuses a misspelt key or a path outside the root rather than falling back to the
 default. It reads this file and never generates one.
+
+With `kind: nginx`, `agree --routes` takes the output of `nginx -T`. Each manifest route
+is the `server` whose `server_name` lists its hosts, and within it `location /`. jcloud
+compares `proxy_pass` (a `set $var` or an `upstream` block is resolved),
+`client_max_body_size` (nginx's `m` is a MiB) and `proxy_set_header`, where an empty
+value is a strip. Open-source nginx has no active health check, so `health_uri` is not
+compared. A route with `auth_request` is reported, because no manifest field states it.
 
 ## Installing it
 

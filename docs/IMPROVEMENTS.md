@@ -4,27 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT3 Reading nginx routes from nginx -T
-
-agree reads the route from `caddy adapt` JSON (route_json.go) rather than from the
-Caddyfile text, so a commented-out block cannot pass. The nginx equivalent is `nginx
--T`, run by the platform script in a pinned nginx image: the whole configuration with
-every include resolved. jcloud parses that file and never runs nginx, the division
-`--adapted` already makes. From each `server` block it reads `server_name` (hosts),
-`proxy_pass` (upstream name and port), `client_max_body_size` (max_body) and the
-`proxy_set_header` lines (proxy). The profile from JCT2 says which kind a platform uses,
-and `--adapted` becomes `--routes <file>`.
-
-Viglet Cloud is the case that motivates it: the edge is nginx inside cloud-frontend,
-behind Cloudflare, with a generated client fragment (clients.nginx.conf) included into
-it and an `auth_request` to client-gate per client host. auth_request is not a manifest
-field in this line; a route carrying one is reported as a directive the manifest does
-not state, not refused.
-
-`check --repo` compares a service's own Caddyfile. A service behind an nginx platform
-usually ships no proxy configuration at all, so an absent `--caddyfile` has to mean not
-checked rather than refused.
-
 ### §JCT4 Comparing against the resolved compose model
 
 agreeCompose reads `services/<name>/docker-compose.yml` as text and asserts substrings:
@@ -145,6 +124,24 @@ The block is finished when Viglet Cloud carries a jcloud.yml and manifests for t
 shio and dumont, and `jcloud agree` passes there. That adoption is the Viglet Cloud
 repository's work, filed in its own roadmap; this line is the half that keeps it passing
 after every jcloud change.
+
+### §JCT18 A route states its auth gate
+
+Since JCT3, agree reads an nginx route and reports an `auth_request` on it as a
+directive the manifest has no field for (route_nginx.go, proxy.Unstated). That report
+can never be cleared. On Viglet Cloud every per-client host in clients.nginx.conf runs
+`auth_request` to client-gate, and admin.viglet.cloud gates through oauth2-proxy, so
+those routes stay red whatever their manifest says.
+
+A route gains `gate:`, the URI of the authorisation subrequest (`/oauth2/auth`). Under
+nginx it is compared with the `auth_request` in force on the route's `location /`,
+inherited from the server like every other value there. Under Caddy it is compared with
+`forward_auth`, whose adapted form is a reverse_proxy handler with a rewrite to that
+URI. An absent `gate:` with a gate on the route stays the report it is today, and a
+declared gate the route does not run is a new one: the route is open to anyone.
+
+Which upstream answers the subrequest is not in the field. It is another route's
+business, and one that route's own manifest states.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
