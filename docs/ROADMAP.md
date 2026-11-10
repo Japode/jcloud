@@ -4,6 +4,8 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
+- 📋 **JCT21** (deps: —) **agree refuses a compose model whose environment holds a number, such as PORT: 2700, which compose accepts** — composeService decodes environment as map[string]string, so Viglet Cloud's model fails to parse and nothing else is compared (found adopting it, cloud C190). → §JCT21
+
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on

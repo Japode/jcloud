@@ -49,6 +49,21 @@ is passed through.
 The two repositories land in order: the platform script first, then the jcloud release
 that drops the fallback, or the platform's CI turns red on a model it never built.
 
+### §JCT21 A compose environment value that is a number
+
+Seen 2026-11-10 adopting v0.3.0 in Viglet Cloud (its C190). `docker compose --profile
+'*' config --no-interpolate --format json` keeps a value written unquoted as a JSON
+number (`PORT: 2700`, `SERVER_PORT: 2720`), and the compose specification allows numbers
+and booleans in an `environment` map. `agree --compose` then stops at the decode: `json:
+cannot unmarshal number into Go struct field composeService.services.environment of type
+string`, and nothing else about any manifest is compared.
+
+Decode each environment value as any JSON scalar and render it the way compose does (a
+number as written, a boolean as `true` or `false`, null as unset) before comparing it
+with the manifest. The list form (`- KEY=value`) is unaffected.
+
+Done when that model decodes and `agree` reports on the manifests it carries.
+
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on
