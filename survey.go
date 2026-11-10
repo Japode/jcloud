@@ -104,6 +104,10 @@ type Declared struct {
 	// declares one (JCT4). Such a service is opt-in: absent from a server where the
 	// collector did not report its profile on is the profile being off, not drift.
 	Profile map[string]string
+
+	// Services the platform builds on its host (JCT7). Their running image is a
+	// local build with no registry digest, so there is no pin to compare it to.
+	Built map[string]bool
 }
 
 // standing answers the one question asked of everything declared: is it up, and is it
@@ -180,6 +184,9 @@ func SurveyAgainst(d Declared, o *Observed) []Divergence {
 		// A digest comparison is only meaningful for something that is up, and only
 		// when both sides were observed: a collector that could not read one of them
 		// reports neither, and silence is not a match.
+		if d.Built[service] {
+			continue
+		}
 		pinned, havePinned := o.Pinned[service]
 		running, haveRunning := o.Running[service]
 		if !havePinned || !haveRunning {
@@ -264,6 +271,12 @@ func DeclaredIn(root string) (Declared, error) {
 			if !contains(d.Others, name) {
 				d.Others = append(d.Others, name)
 			}
+		}
+		if m.Build != "" {
+			if d.Built == nil {
+				d.Built = map[string]bool{}
+			}
+			d.Built[service] = true
 		}
 		if m.Profile != "" {
 			if d.Profile == nil {

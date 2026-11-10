@@ -56,6 +56,13 @@ type Profile struct {
 	// no per-service file: nothing is compared, the report says so, and a file
 	// with a live writer is named as one the platform claims no handling for.
 	Backup string
+
+	// Whether this platform builds images on its own host (JCT7). False on
+	// Japode, where nothing is built on the server, so a manifest's `build:` is
+	// refused there; a platform that does say true has its built services
+	// checked against the compose model's build and reported as built, not as
+	// unpinned.
+	Builds bool
 }
 
 // DefaultProfile is the Japode platform's layout, and what a root with no
@@ -92,6 +99,7 @@ type profileFile struct {
 	Deploy          *string `yaml:"deploy"`
 	Addon           *string `yaml:"addon"`
 	Backup          *string `yaml:"backup"`
+	Builds          *bool   `yaml:"builds"`
 }
 
 // routeKinds is every route grammar this build can read: Caddy through `caddy
@@ -142,6 +150,9 @@ func ParseProfile(data []byte) (*Profile, error) {
 	set(&p.Deploy, f.Deploy)
 	set(&p.Addon, f.Addon)
 	set(&p.Backup, f.Backup)
+	if f.Builds != nil {
+		p.Builds = *f.Builds
+	}
 
 	if problems := p.Validate(); len(problems) > 0 {
 		return nil, fmt.Errorf("%s: %s", ProfileFile, strings.Join(problems, "; "))

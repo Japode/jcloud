@@ -47,6 +47,12 @@ type Readiness struct {
 	Fixed   []string // declared with a fixed value and set anyway, which is ignored
 	Pinned  string   // the digest already pinned, or ""
 
+	// A service the platform builds on its host (JCT7): the Dockerfile, and
+	// nothing to pin. Refused is the sentence saying the platform builds nothing,
+	// when the manifest says build: on a profile that does not allow it.
+	Built   string
+	Refused string
+
 	// What the publisher says it pushed, when a record was consulted at all. Asked
 	// apart from the rest because "nobody looked" and "nothing was published" are
 	// two different answers, and reporting the first as the second would send
@@ -66,7 +72,19 @@ type Readiness struct {
 // other service — which is the whole sentence this command exists to say (JC97).
 // What the record changes is the answer's usefulness, not its verdict: the line
 // under it is the command that fixes it.
-func (r Readiness) Ready() bool { return len(r.Missing) == 0 && r.Pinned != "" }
+//
+// A service built on the host has nothing to pin and needs no digest (JCT7).
+func (r Readiness) Ready() bool {
+	return len(r.Missing) == 0 && r.Refused == "" && (r.Pinned != "" || r.Built != "")
+}
+
+// Moving is a pin that is a tag and not a digest (JCT7): the deploy brings up
+// whatever the tag points at on the day, which is the choice JC8 refused making
+// anywhere but where the image was published. Not a refusal — the service runs —
+// but named, with the digest to pin in its place when the record has one.
+func (r Readiness) Moving() bool {
+	return r.Pinned != "" && !strings.Contains(r.Pinned, "@sha256:")
+}
 
 // Behind is a deploy that is available and has not been run: the publisher has moved
 // past what this machine is pinned at.
@@ -213,6 +231,12 @@ func (p *Published) why(service string) string {
 // the publisher's record when one was gathered.
 func Assess(prof *Profile, m *Manifest, keys map[string]bool, imagesEnv string, pub *Published) Readiness {
 	r := Readiness{Service: m.Name, Pinned: pinnedDigest(prof, m, imagesEnv)}
+	if m.Build != "" {
+		r.Built = m.Build
+		if !prof.Builds {
+			r.Refused = "declares build: and this platform builds nothing on its host — jcloud.yml does not say builds: true"
+		}
+	}
 	if pub != nil {
 		r.Asked = true
 		if ref, ok := pub.Ref[m.Name]; ok {
@@ -374,6 +398,25 @@ func report(prof *Profile, r Readiness, envPath string) bool {
 		fmt.Printf("  \033[33m!\033[0m %s: %s is set in %s and the manifest fixes that value — it is ignored\n",
 			r.Service, key, filepath.Base(envPath))
 	}
+	if r.Ready() && r.Built != "" {
+		// Nothing pulled, so nothing to pin and no publisher to ask (JCT7).
+		fmt.Printf("  \033[32m✓\033[0m %s: every variable is set, built on the host from %s — nothing to pin\n", r.Service, r.Built)
+		return true
+	}
+	if r.Ready() && r.Moving() {
+		fmt.Printf("  \033[33m!\033[0m %s: every variable is set, pinned to the moving tag %s — what runs is whatever it points at on the day of the deploy\n",
+			r.Service, r.Pinned)
+		switch {
+		case r.Published != "":
+			fmt.Printf("      its CI's newest is %s%s — pin that digest with:\n", shortDigest(r.Published), tagList(r.Tags))
+			fmt.Printf("      %s\n", prof.DeployCommand(r.Service, r.Published))
+		case r.Asked:
+			fmt.Printf("      and there is no digest to pin in its place: %s\n", r.Unpublished)
+		default:
+			fmt.Printf("      --published names the digest to pin in its place\n")
+		}
+		return true
+	}
 	if r.Ready() {
 		fmt.Printf("  \033[32m✓\033[0m %s: every variable is set, pinned at %s\n", r.Service, shortDigest(r.Pinned))
 		if r.Behind() {
@@ -386,13 +429,16 @@ func report(prof *Profile, r Readiness, envPath string) bool {
 		return true
 	}
 	fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s\n", r.Service)
+	if r.Refused != "" {
+		fmt.Fprintf(os.Stderr, "      %s\n", r.Refused)
+	}
 	for _, key := range r.Missing {
 		fmt.Fprintf(os.Stderr, "      %s is declared and not in %s — add it to the SERVICES_ENV secret\n", key, filepath.Base(envPath))
 		// On the diff where somebody can act on it, the way check-layout.sh does.
 		fmt.Printf("::error::%s is declared by %s and missing from the configuration\n",
 			key, filepath.ToSlash(prof.ManifestPath(r.Service)))
 	}
-	if r.Pinned == "" {
+	if r.Pinned == "" && r.Built == "" {
 		reportUnpinned(prof, r)
 	}
 	return false

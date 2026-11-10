@@ -26,6 +26,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -97,6 +98,10 @@ func (m *Manifest) AgreeIn(root string, prof *Profile, in AgreeInputs) ([]string
 	// would have consulted it.
 	needs, problems := m.resolveNeeds(root, prof)
 	p = append(p, problems...)
+
+	if m.Build != "" && !prof.Builds {
+		bad("build: %s — this platform builds nothing on its host, and jcloud.yml does not say builds: true; name the published image instead (JCT7)", m.Build)
+	}
 
 	// The resolved model when the platform supplied one, and the per-service
 	// file's text otherwise (compose_model.go says why the first is the one to
@@ -256,8 +261,17 @@ func (m *Manifest) agreeCompose(at, body string, prof *Profile) []string {
 		bad("%s: nothing exposes port %d, which the manifest declares", at, m.Port)
 	}
 
-	if imageVar := prof.ImageVarOf(m); !strings.Contains(body, "${"+imageVar) {
-		bad("%s: the image is not ${%s}, which is what the deploy pins", at, imageVar)
+	switch {
+	case m.Build != "":
+		// Textually only that the file builds, and from a file of that name: the
+		// path itself is resolved against a context, which the model (JCT4) has.
+		if !strings.Contains(body, "build:") || !strings.Contains(body, path.Base(m.Build)) {
+			bad("%s: nothing builds from %s, which the manifest declares", at, m.Build)
+		}
+	default:
+		if imageVar := prof.ImageVarOf(m); !strings.Contains(body, "${"+imageVar) {
+			bad("%s: the image is not ${%s}, which is what the deploy pins", at, imageVar)
+		}
 	}
 	if want := prof.Container(m.Name); !strings.Contains(body, "container_name: "+want) {
 		bad("%s: container_name is not %s, which the short name derives", at, want)

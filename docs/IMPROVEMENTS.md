@@ -4,26 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT7 Built images and tag pins
-
-The manifest refuses a tag or digest in `image:` because the deploy pins it into
-`.deploy-state/images.env` (pinnedDigest in up.go). Viglet Cloud has three kinds at
-once: products pulled from GHCR by a moving tag (`ghcr.io/openviglet/turing:latest`,
-shio, dumont), images built on the server from a Dockerfile in the platform tree
-(console, keycloak, the sites), and third-party images with a fixed tag.
-
-The schema gains `build: <dockerfile path>` as the alternative to `image:` for the
-second kind, checked against the compose model's `build.dockerfile` (JCT4), and `up`
-reports it as built on the host rather than unpinned. A moving tag stays a finding: `up`
-names it and prints the digest the `--published` record says it resolves to now, which
-is the step Viglet Cloud needs to move to digests.
-
-The pin file and the variable spelling come from the profile (JCT2): Viglet Cloud spells
-it `VIGLET_TURING_IMAGE`.
-
-Nothing here softens the rule for Japode. Its profile keeps `build:` refused, since
-nothing is built on that server.
-
 ### §JCT8 Declared env prefix and shared keys
 
 The `.env.example` key for a manifest variable is `<SCREAM>_<NAME>` (agree.go), and

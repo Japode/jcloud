@@ -51,6 +51,7 @@ deploy: DEPLOY_SERVICE={name} DEPLOY_IMAGE={image} bash scripts/deploy.sh {name}
 addon: addons/{type}/addon.yml
 backup: backup-conf                    # or none: no backup.conf compared, and
                                        # each sqlite file or database named
+builds: false                          # true: a manifest may say build: <Dockerfile>
 ```
 
 jcloud refuses a misspelt key or a path outside the root rather than falling back to the

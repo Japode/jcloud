@@ -11,6 +11,7 @@
 - ✅ **JCT4** **agree greps one compose file per service, so a single shared compose file split by profiles reads as missing** — agree --compose finds each service by name in the resolved compose model, so a shared file split by profiles agrees (design superseded: uninterpolated) (design recorded in `compose_model.go`).
 - ✅ **JCT5** **needs states only a sidecar database the service owns, never a postgres, redis or Keycloak several services share** — A need may say shared: <service>; agree holds that platform service to the addon and the client to waiting on and reaching it (design recorded in `addon.go`).
 - ✅ **JCT6** **agree refuses a service without a Japode-format backup.conf, so a platform with its own backup scripts cannot pass** — jcloud.yml may say backup: none; agree then compares no backup.conf, says so, and names each sqlite file or database the platform claims nothing for (design recorded in `agree.go`).
+- ✅ **JCT7** **up and survey read every image built on the server as unpinned, since a digest in images.env is the only pin they know** — build: names a host-built image, checked against the model and ready unpinned where builds: true; up names a tag pin and the digest to pin (design recorded in `up.go`).
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 

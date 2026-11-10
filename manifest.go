@@ -13,6 +13,7 @@ package main
 
 import (
 	"fmt"
+	"path"
 	"regexp"
 	"strings"
 
@@ -34,7 +35,12 @@ type Manifest struct {
 	Version int    `yaml:"version"`
 	Name    string `yaml:"name"`
 	Image   string `yaml:"image"`
-	Port    int    `yaml:"port"`
+	// The alternative to Image, for a platform that builds a service on its own
+	// host (JCT7): the Dockerfile, relative to the platform root. Nothing is
+	// pinned for it, because nothing is pulled. Refused by agree and up unless
+	// jcloud.yml says `builds: true`, which the Japode platform does not.
+	Build string `yaml:"build"`
+	Port  int    `yaml:"port"`
 
 	Health  Health   `yaml:"health"`
 	Volumes []Volume `yaml:"volumes"`
@@ -204,8 +210,16 @@ func (m *Manifest) Validate() []string {
 	}
 
 	switch {
+	case m.Build != "" && m.Image != "":
+		bad("image: and build: are both declared — an image is either pulled or built on the host, and one of the two would have to win silently")
+	case m.Build != "":
+		// Whether the platform builds anything at all is its profile's to say
+		// (`builds:`, JCT7), and agree and up refuse it there. Here only the path.
+		if path.IsAbs(m.Build) || strings.Split(path.Clean(m.Build), "/")[0] == ".." {
+			bad("build: %q is not a path inside the platform tree", m.Build)
+		}
 	case m.Image == "":
-		bad("image: is missing — the registry path, with no tag and no digest")
+		bad("image: is missing — the registry path, with no tag and no digest (or build:, the Dockerfile a platform that builds on the host builds it from)")
 	case strings.ContainsAny(m.Image, "@:"):
 		// The digest is resolved by whoever published it and pinned into
 		// .deploy-state/images.env by the deploy. A tag here would be a second

@@ -100,7 +100,11 @@ func (m *Manifest) AgreeWithRepo(root, repository string, layout RepoLayout) []s
 		p = append(p, m.agreeCaddyfile(ca, string(caddyfile))...)
 	}
 
-	p = append(p, m.agreeWorkflows(root, repository)...)
+	// A service built on the platform's host publishes nothing (JCT7), so there is
+	// no workflow to hold to an image it does not have.
+	if m.Build == "" {
+		p = append(p, m.agreeWorkflows(root, repository)...)
+	}
 	return p
 }
 

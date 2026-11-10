@@ -27,6 +27,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 )
 
@@ -35,11 +36,15 @@ type composeModel struct {
 }
 
 type composeService struct {
-	ContainerName string             `json:"container_name"`
-	Image         string             `json:"image"`
-	Environment   map[string]*string `json:"environment"`
-	Expose        []string           `json:"expose"`
-	Ports         []struct {
+	ContainerName string `json:"container_name"`
+	Image         string `json:"image"`
+	Build         *struct {
+		Context    string `json:"context"`
+		Dockerfile string `json:"dockerfile"`
+	} `json:"build"`
+	Environment map[string]*string `json:"environment"`
+	Expose      []string           `json:"expose"`
+	Ports       []struct {
 		Target int `json:"target"`
 	} `json:"ports"`
 	Healthcheck *struct {
@@ -82,6 +87,21 @@ func (s composeService) mounts(source, target string) bool {
 		}
 	}
 	return false
+}
+
+// dockerfile is the file a service builds from, context and all, with forward
+// slashes, or "" for one that builds nothing. The context compose prints is
+// absolute on the machine that ran it, so a manifest's path is compared as its
+// suffix.
+func (s composeService) dockerfile() string {
+	if s.Build == nil {
+		return ""
+	}
+	file := s.Build.Dockerfile
+	if file == "" {
+		file = "Dockerfile"
+	}
+	return path.Join(strings.ReplaceAll(s.Build.Context, `\`, "/"), file)
 }
 
 // targets is a volume mounted at target, whatever it is called.
@@ -132,8 +152,15 @@ func (m *Manifest) agreeComposeModel(model *composeModel, needs []resolvedNeed, 
 	if !svc.listens(m.Port) {
 		bad("%s: nothing exposes port %d, which the manifest declares", at, m.Port)
 	}
-	if imageVar := prof.ImageVarOf(m); !strings.Contains(svc.Image, "${"+imageVar) {
-		bad("%s: the image is %q and not ${%s}, which is what the deploy pins", at, svc.Image, imageVar)
+	switch {
+	case m.Build != "":
+		if got := svc.dockerfile(); !strings.HasSuffix("/"+got, "/"+path.Clean(m.Build)) {
+			bad("%s: builds from %q and not %s, which the manifest declares", at, got, m.Build)
+		}
+	default:
+		if imageVar := prof.ImageVarOf(m); !strings.Contains(svc.Image, "${"+imageVar) {
+			bad("%s: the image is %q and not ${%s}, which is what the deploy pins", at, svc.Image, imageVar)
+		}
 	}
 	if want := prof.Container(m.Name); svc.ContainerName != want {
 		bad("%s: container_name is %q and not %s, which the short name derives", at, svc.ContainerName, want)
