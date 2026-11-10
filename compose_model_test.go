@@ -195,6 +195,38 @@ func TestNeedyModel(t *testing.T) {
 	}
 }
 
+// JCT21: compose keeps an environment value written unquoted as a JSON number or
+// boolean. The model still decodes, every other fact is still compared, and each
+// value reads as compose hands it to the container.
+func TestModelEnvironmentHoldsScalars(t *testing.T) {
+	scalars := `"DATABASE_PATH": "/data/paste.db",
+        "PORT": 2700, "RATIO": 1.50, "DEBUG": true, "QUIET": false, "UNSET": null,`
+	if p := agreeModel(t, `"DATABASE_PATH": "/data/paste.db",`, scalars); len(p) != 0 {
+		t.Fatalf("a model with numbers and booleans in its environment should agree, got:\n  %s", strings.Join(p, "\n  "))
+	}
+	if p := strings.Join(agreeModel(t, `"expose": ["8080"]`, `"expose": ["8090"], "environment": {"PORT": 2700}`), "\n"); !strings.Contains(p, "nothing exposes port 8080") {
+		t.Fatalf("the rest of the model is still compared, got:\n%s", p)
+	}
+
+	model, err := parseComposeModel([]byte(strings.Replace(fixtureModel, `"DATABASE_PATH": "/data/paste.db",`, scalars, 1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env := model.Services["paste"].Environment
+	for name, want := range map[string]string{"PORT": "2700", "RATIO": "1.50", "DEBUG": "true", "QUIET": "false", "DATABASE_PATH": "/data/paste.db"} {
+		if got := env[name]; got == nil || *got != want {
+			t.Errorf("%s: want %q, got %v", name, want, got)
+		}
+	}
+	if got, set := env["UNSET"]; !set || got != nil {
+		t.Errorf("UNSET: a null value is set without one, got %v (set %v)", got, set)
+	}
+
+	if _, err := parseComposeModel([]byte(`{"services": {"x": {"environment": {"A": [1]}}}}`)); err == nil || !strings.Contains(err.Error(), "environment A") {
+		t.Fatalf("a value that is not a scalar names the variable, got %v", err)
+	}
+}
+
 func TestAMalformedModelIsReported(t *testing.T) {
 	for _, bad := range []string{"not json", `{"name": "x"}`} {
 		root := write(t, "", "", "")

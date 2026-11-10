@@ -25,6 +25,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"path"
@@ -42,8 +43,8 @@ type composeService struct {
 		Context    string `json:"context"`
 		Dockerfile string `json:"dockerfile"`
 	} `json:"build"`
-	Environment map[string]*string `json:"environment"`
-	Expose      []string           `json:"expose"`
+	Environment composeEnv `json:"environment"`
+	Expose      []string   `json:"expose"`
 	Ports       []struct {
 		Target int `json:"target"`
 	} `json:"ports"`
@@ -60,6 +61,50 @@ type composeService struct {
 		Condition string `json:"condition"`
 	} `json:"depends_on"`
 	Profiles []string `json:"profiles"`
+}
+
+// composeEnv is a service's environment as the value compose hands the container,
+// nil for a name set without one (JCT21). The specification lets a value be any
+// scalar and compose's JSON keeps one written unquoted as a number or a boolean
+// (`PORT: 2700`), so each is decoded as a scalar and rendered as compose renders
+// it: a number as written, a boolean as true or false. The list form
+// (`- KEY=value`) never reaches here: compose has already made it this map.
+type composeEnv map[string]*string
+
+func (e *composeEnv) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw == nil {
+		*e = nil
+		return nil
+	}
+	env := make(composeEnv, len(raw))
+	for name, v := range raw {
+		d := json.NewDecoder(bytes.NewReader(v))
+		d.UseNumber()
+		var value any
+		if err := d.Decode(&value); err != nil {
+			return fmt.Errorf("environment %s: %w", name, err)
+		}
+		switch value := value.(type) {
+		case nil:
+			env[name] = nil
+		case string:
+			env[name] = &value
+		case json.Number:
+			s := value.String()
+			env[name] = &s
+		case bool:
+			s := fmt.Sprint(value)
+			env[name] = &s
+		default:
+			return fmt.Errorf("environment %s: %s is not a scalar", name, v)
+		}
+	}
+	*e = env
+	return nil
 }
 
 func parseComposeModel(data []byte) (*composeModel, error) {

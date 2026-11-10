@@ -4,8 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-- 📋 **JCT21** (deps: —) **agree refuses a compose model whose environment holds a number, such as PORT: 2700, which compose accepts** — composeService decodes environment as map[string]string, so Viglet Cloud's model fails to parse and nothing else is compared (found adopting it, cloud C190). → §JCT21
-
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 ## Block D — What jcloud prints: a report a reader can act on
@@ -19,7 +17,7 @@
 - 📋 **JCT24** (deps: JCT22, JCT23) **survey cannot say a backup is stale: it reads that a timer is active, never whether its last run succeeded or when** — A timer whose unit fails every night still reads active, which is the 26 days without a copy that JC2 found. → §JCT24
 - 📋 **JCT25** (deps: JCT22, JCT23) **Nothing reports a disk filling or a TLS certificate near expiry until the service it holds up has already failed** — Both are answered locally by the host, so observe can read them and survey can hold them to a floor jcloud.yml declares. → §JCT25
 - 📋 **JCT28** (deps: JCT22, JCT26, JCT27) **Nothing runs survey on a schedule, so drift and failed jobs are found only when somebody thinks to look** — jcloud ships a timer and a self-hosted workflow template that observe, compare with the last run and keep one issue per finding. → §JCT28
-- 📋 **JCT29** (deps: JCT21, JCT24, JCT25, JCT28, cloud C190) **Viglet Cloud's server is watched by nothing that reads it against what its own tree declares** — Adopting it with only jcloud.yml and manifests, no Viglet bash, is the proof the watch is transparent to a platform. → §JCT29
+- 📋 **JCT29** (deps: JCT21 ✅, JCT24, JCT25, JCT28, cloud C190) **Viglet Cloud's server is watched by nothing that reads it against what its own tree declares** — Adopting it with only jcloud.yml and manifests, no Viglet bash, is the proof the watch is transparent to a platform. → §JCT29
 
 ## Done when — Block B
 
