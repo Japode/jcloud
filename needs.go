@@ -39,16 +39,16 @@ type resolvedNeed struct {
 
 // resolveNeeds reads addons/<type>/addon.yml for every need, from the repository
 // root the caller is comparing against.
-func (m *Manifest) resolveNeeds(root string) ([]resolvedNeed, []string) {
+func (m *Manifest) resolveNeeds(root string, prof *Profile) ([]resolvedNeed, []string) {
 	var out []resolvedNeed
 	var problems []string
 	for _, n := range m.Needs {
 		r := resolvedNeed{need: n, svc: m.Name + "-" + n.Name}
-		at := "addons/" + n.Type + "/addon.yml"
+		at := filepath.ToSlash(prof.AddonFile(n.Type))
 		out = append(out, r)
 		last := &out[len(out)-1]
 
-		data, err := os.ReadFile(filepath.Join(root, "addons", n.Type, "addon.yml"))
+		data, err := os.ReadFile(filepath.Join(root, prof.AddonFile(n.Type)))
 		if err != nil {
 			problems = append(problems, fmt.Sprintf(
 				"%s: needs[%s].type is %q and this repository provides no such addon — a need is answered by a file here, never by something fetched (JC32)",
@@ -82,7 +82,7 @@ func dependsOnHealthy(name string) *regexp.Regexp {
 	return regexp.MustCompile(`(?m)^\s*depends_on:\s*\n\s+` + regexp.QuoteMeta(name) + `:\s*\n\s+condition:\s*service_healthy\s*$`)
 }
 
-func (m *Manifest) agreeNeeds(at, body string, needs []resolvedNeed) []string {
+func (m *Manifest) agreeNeeds(at, body string, needs []resolvedNeed, prof *Profile) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -92,7 +92,7 @@ func (m *Manifest) agreeNeeds(at, body string, needs []resolvedNeed) []string {
 		}
 		a := r.addon
 
-		if want := "container_name: japode-" + r.svc; !strings.Contains(body, want) {
+		if want := "container_name: " + prof.Container(r.svc); !strings.Contains(body, want) {
 			bad("%s: no %s — the need's container name is the service's name and its own, derived", at, want)
 		}
 		if !strings.Contains(body, a.Image) {

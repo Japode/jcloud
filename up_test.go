@@ -51,7 +51,7 @@ func TestAFixedValueIsNotMissing(t *testing.T) {
 		t.Fatalf("%s is not reported as fixed: %v", key, fixedKeys)
 	}
 
-	r := Assess(m, envKeys(""), "", nil)
+	r := Assess(DefaultProfile(), m, envKeys(""), "", nil)
 	if contains(r.Missing, key) {
 		t.Fatalf("%s was reported missing, and it is not configuration: %v", key, r.Missing)
 	}
@@ -65,7 +65,7 @@ func TestAFixedValueSetAnywayIsReportedAndDoesNotBlock(t *testing.T) {
 	m.Env = append(m.Env, EnvVar{Name: "PINNED_THING", Value: &fixed})
 
 	body := everyRequiredKey(t, m) + m.SCREAM() + "_PINNED_THING=set-by-hand\n"
-	r := Assess(m, envKeys(body), m.SCREAM()+"_IMAGE=ghcr.io/x/y@sha256:abc\n", nil)
+	r := Assess(DefaultProfile(), m, envKeys(body), m.SCREAM()+"_IMAGE=ghcr.io/x/y@sha256:abc\n", nil)
 	if !contains(r.Fixed, m.SCREAM()+"_PINNED_THING") {
 		t.Fatalf("a fixed value set by hand was not reported: %+v", r)
 	}
@@ -84,7 +84,7 @@ func TestEveryMissingKeyIsNamedAtOnce(t *testing.T) {
 		t.Fatalf("the fixture declares %d key(s), which is too few to test this", len(required))
 	}
 
-	r := Assess(m, envKeys(""), "", nil)
+	r := Assess(DefaultProfile(), m, envKeys(""), "", nil)
 	if len(r.Missing) != len(required) {
 		t.Fatalf("%d of %d missing key(s) reported: %v", len(r.Missing), len(required), r.Missing)
 	}
@@ -97,7 +97,7 @@ func TestEveryMissingKeyIsNamedAtOnce(t *testing.T) {
 // different sentence from a missing variable. JC8 is why it is not looked up here.
 func TestAServiceWithNoPinnedDigestIsNotReady(t *testing.T) {
 	m := parseValid(t)
-	r := Assess(m, envKeys(everyRequiredKey(t, m)), "", nil)
+	r := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), "", nil)
 	if len(r.Missing) != 0 {
 		t.Fatalf("keys reported missing when all are set: %v", r.Missing)
 	}
@@ -113,7 +113,7 @@ func TestAServiceWithNoPinnedDigestIsNotReady(t *testing.T) {
 func TestAConfiguredAndPinnedServiceIsReady(t *testing.T) {
 	m := parseValid(t)
 	state := m.SCREAM() + "_IMAGE=ghcr.io/japode/x@sha256:abcdef0123456789\n"
-	r := Assess(m, envKeys(everyRequiredKey(t, m)), state, nil)
+	r := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), state, nil)
 	if !r.Ready() {
 		t.Fatalf("a configured, pinned service is not ready: %+v", r)
 	}
@@ -124,11 +124,11 @@ func TestAConfiguredAndPinnedServiceIsReady(t *testing.T) {
 func TestOneServicesDigestIsNotAnothers(t *testing.T) {
 	m := parseValid(t)
 	other := "SOMETHING_ELSE_IMAGE=ghcr.io/japode/other@sha256:9999\n"
-	if got := pinnedDigest(m, other); got != "" {
+	if got := pinnedDigest(DefaultProfile(), m, other); got != "" {
 		t.Fatalf("another service's digest was read as this one's: %q", got)
 	}
 	both := other + m.SCREAM() + "_IMAGE=ghcr.io/japode/mine@sha256:1111\n"
-	if got := pinnedDigest(m, both); !strings.Contains(got, "mine") {
+	if got := pinnedDigest(DefaultProfile(), m, both); !strings.Contains(got, "mine") {
 		t.Fatalf("this service's digest was not found among others: %q", got)
 	}
 }
@@ -191,7 +191,7 @@ func TestAPublishedDigestIsResolvedAndCarriesItsTags(t *testing.T) {
 	ref := "ghcr.io/japode/" + m.Name + "@sha256:0261ea9f9358"
 	p := ParsePublished("published " + m.Name + " " + ref + "\ntag " + m.Name + " latest\n")
 
-	r := Assess(m, envKeys(everyRequiredKey(t, m)), "", p)
+	r := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), "", p)
 	if r.Published != ref {
 		t.Fatalf("the published digest was not resolved: %+v", r)
 	}
@@ -211,7 +211,7 @@ func TestAPublishedDigestIsNotAPinnedOne(t *testing.T) {
 	m := parseValid(t)
 	p := ParsePublished("published " + m.Name + " ghcr.io/japode/x@sha256:0261ea\n")
 
-	r := Assess(m, envKeys(everyRequiredKey(t, m)), "", p)
+	r := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), "", p)
 	if r.Ready() {
 		t.Fatal("a service with nothing pinned was reported ready because its CI had published")
 	}
@@ -225,19 +225,19 @@ func TestAPublishedDigestIsNotAPinnedOne(t *testing.T) {
 func TestNobodyAskedIsNotNothingPublished(t *testing.T) {
 	m := parseValid(t)
 
-	unasked := Assess(m, envKeys(everyRequiredKey(t, m)), "", nil)
+	unasked := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), "", nil)
 	if unasked.Asked || unasked.Unpublished != "" {
 		t.Fatalf("a run with no record claimed to know what was published: %+v", unasked)
 	}
 
-	asked := Assess(m, envKeys(everyRequiredKey(t, m)), "", ParsePublished("unpublished "+m.Name+" never\n"))
+	asked := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), "", ParsePublished("unpublished "+m.Name+" never\n"))
 	if !asked.Asked || asked.Unpublished == "" {
 		t.Fatalf("a service the record says published nothing has no reason to show: %+v", asked)
 	}
 	// A service the record does not mention at all is a record older than the service,
 	// and saying "its CI published nothing" about it would send somebody to the wrong
 	// repository.
-	absent := Assess(m, envKeys(everyRequiredKey(t, m)), "", ParsePublished("published other ghcr.io/japode/other@sha256:1\n"))
+	absent := Assess(DefaultProfile(), m, envKeys(everyRequiredKey(t, m)), "", ParsePublished("published other ghcr.io/japode/other@sha256:1\n"))
 	if absent.Unpublished == asked.Unpublished {
 		t.Fatalf("a service missing from the record reads as one that published nothing: %q", absent.Unpublished)
 	}
@@ -252,13 +252,13 @@ func TestBehindComparesDigestsAndNotSpellings(t *testing.T) {
 	keys := envKeys(everyRequiredKey(t, m))
 	same := "sha256:0261ea9f935886de"
 
-	cased := Assess(m, keys, m.SCREAM()+"_IMAGE=ghcr.io/japode/x@"+same+"\n",
+	cased := Assess(DefaultProfile(), m, keys, m.SCREAM()+"_IMAGE=ghcr.io/japode/x@"+same+"\n",
 		ParsePublished("published "+m.Name+" ghcr.io/Japode/x@"+same+"\n"))
 	if cased.Behind() {
 		t.Fatalf("one digest written under two spellings of the name reported a deploy waiting: %+v", cased)
 	}
 
-	moved := Assess(m, keys, m.SCREAM()+"_IMAGE=ghcr.io/japode/x@"+same+"\n",
+	moved := Assess(DefaultProfile(), m, keys, m.SCREAM()+"_IMAGE=ghcr.io/japode/x@"+same+"\n",
 		ParsePublished("published "+m.Name+" ghcr.io/japode/x@sha256:3e4b478042d75a35\n"))
 	if !moved.Behind() {
 		t.Fatalf("a newer published digest was not reported: %+v", moved)
@@ -273,7 +273,7 @@ func TestTheDeployCommandNamesTheVariablesTheDeployReads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("scripts/deploy.sh is what this command is for: %v", err)
 	}
-	got := deployCommand("skillgist", "ghcr.io/japode/skillgist@sha256:0261ea")
+	got := DefaultProfile().DeployCommand("skillgist", "ghcr.io/japode/skillgist@sha256:0261ea")
 	for _, name := range []string{"DEPLOY_SERVICE", "DEPLOY_IMAGE"} {
 		if !strings.Contains(got, name+"=") {
 			t.Fatalf("%s is not set by the command handed to a person: %s", name, got)

@@ -28,6 +28,27 @@ Exit codes: `0` everything checked passed, `1` something was refused, `2` the ar
 were wrong. Problems are reported all at once, and inside GitHub Actions each one is also
 printed as an `::error file=…::` annotation.
 
+## Another platform's layout
+
+`agree`, `survey` and `up` read the platform from its root. By default they expect the
+Japode layout. A platform that keeps the same files under other names puts a `jcloud.yml`
+at its root saying where they are. Every key is optional and defaults to the value shown:
+
+```yaml
+manifest: services/{name}/japode.yml   # compose file and backup.conf sit beside it
+route:
+  path: caddy/sites/{name}.caddy
+  kind: caddy                          # the only kind this build reads
+container_prefix: japode-
+image_var: "{NAME}_IMAGE"              # {NAME}: the short name, upper case, - as _
+pin_file: .deploy-state/images.env
+deploy: DEPLOY_SERVICE={name} DEPLOY_IMAGE={image} bash scripts/deploy.sh {name}
+addon: addons/{type}/addon.yml
+```
+
+jcloud refuses a misspelt key or a path outside the root rather than falling back to the
+default. It reads this file and never generates one.
+
 ## Installing it
 
 Each `v*` tag is a release. Pick one of three ways to run it:

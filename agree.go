@@ -43,7 +43,20 @@ func (m *Manifest) Agree(root string) []string {
 // substring comparison that used to stand in for it passed on a commented-out
 // route (JC33), and a check that can be satisfied by a comment is worse than one
 // that says it did not run.
+//
+// Where each file sits is the platform's to say, in jcloud.yml at the root
+// (profile.go); a root without one is read with the Japode layout. A profile that
+// cannot be read is the one answer, because every path below would come from it.
 func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
+	prof, err := LoadProfile(root)
+	if err != nil {
+		return []string{err.Error()}
+	}
+	return m.AgreeIn(root, prof, adaptedConfig)
+}
+
+// AgreeIn is AgreeWith with the platform's profile already read.
+func (m *Manifest) AgreeIn(root string, prof *Profile, adaptedConfig []byte) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -60,17 +73,17 @@ func (m *Manifest) AgreeWith(root string, adaptedConfig []byte) []string {
 	// both the compose comparison and the backup.conf one ask it. Resolved once so
 	// a type nobody provides is reported once rather than by every check that
 	// would have consulted it.
-	needs, problems := m.resolveNeeds(root)
+	needs, problems := m.resolveNeeds(root, prof)
 	p = append(p, problems...)
 
-	svcDir := filepath.Join("services", m.Name)
+	svcDir := prof.ServiceDir(m.Name)
 	if compose, ok := read(filepath.Join(svcDir, "docker-compose.yml")); ok {
 		at := filepath.ToSlash(filepath.Join(svcDir, "docker-compose.yml"))
-		p = append(p, m.agreeCompose(at, compose)...)
-		p = append(p, m.agreeNeeds(at, compose, needs)...)
+		p = append(p, m.agreeCompose(at, compose, prof)...)
+		p = append(p, m.agreeNeeds(at, compose, needs, prof)...)
 	}
-	routeRel := filepath.ToSlash(filepath.Join("caddy", "sites", m.Name+".caddy"))
-	if route, ok := read(filepath.Join("caddy", "sites", m.Name+".caddy")); ok {
+	routeRel := filepath.ToSlash(prof.RouteFile(m.Name))
+	if route, ok := read(prof.RouteFile(m.Name)); ok {
 		// Only the source-level assertion stays textual: whether the address block
 		// reads {$SVC_HOSTS:…} is a fact about the file, and `caddy adapt` has
 		// already resolved that away into the default it carries.
@@ -152,7 +165,7 @@ func (m *Manifest) hostsVar(r Route) string {
 	return m.SCREAM() + "_" + strings.ToUpper(r.Log) + "_HOSTS"
 }
 
-func (m *Manifest) agreeCompose(at, body string) []string {
+func (m *Manifest) agreeCompose(at, body string, prof *Profile) []string {
 	var p []string
 	bad := func(format string, args ...any) { p = append(p, fmt.Sprintf(format, args...)) }
 
@@ -162,10 +175,10 @@ func (m *Manifest) agreeCompose(at, body string) []string {
 		bad("%s: nothing exposes port %d, which the manifest declares", at, m.Port)
 	}
 
-	if !strings.Contains(body, "${"+m.SCREAM()+"_IMAGE") {
-		bad("%s: the image is not ${%s_IMAGE}, which is what the deploy pins", at, m.SCREAM())
+	if imageVar := prof.ImageVarOf(m); !strings.Contains(body, "${"+imageVar) {
+		bad("%s: the image is not ${%s}, which is what the deploy pins", at, imageVar)
 	}
-	if want := "japode-" + m.Name; !strings.Contains(body, "container_name: "+want) {
+	if want := prof.Container(m.Name); !strings.Contains(body, "container_name: "+want) {
 		bad("%s: container_name is not %s, which the short name derives", at, want)
 	}
 
@@ -179,7 +192,7 @@ func (m *Manifest) agreeCompose(at, body string) []string {
 	// `healthcheck:` in the file was then whichever of the two somebody wrote
 	// first. Anchored to the line so that `japode-paste` does not match
 	// `japode-paste-db`.
-	own := firstFrom(body, `(?m)^\s*container_name: `+regexp.QuoteMeta("japode-"+m.Name)+`\s*$`)
+	own := firstFrom(body, `(?m)^\s*container_name: `+regexp.QuoteMeta(prof.Container(m.Name))+`\s*$`)
 	if i := strings.Index(own, "healthcheck:"); i < 0 {
 		bad("%s: no healthcheck:, so the deploy has nothing to wait on", at)
 	} else {

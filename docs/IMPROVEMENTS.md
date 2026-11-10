@@ -4,26 +4,6 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
-### §JCT2 A platform profile names the layout
-
-Every path jcloud opens is a literal in its code: `services/*/japode.yml` in up.go and
-survey.go, `caddy/sites/<name>.caddy` and `container_name: japode-<name>` in agree.go,
-`.deploy-state/images.env` and the `scripts/deploy.sh` argv in up.go,
-`addons/<type>/addon.yml` in needs.go. A platform root gains one file, `jcloud.yml`,
-that states them: the manifest glob and file name, the route source and its kind, the
-container-name prefix, the image variable spelling, the pin file and the deploy command
-`up` prints. Absent, every value is the one Japode uses today, so the Japode platform
-changes no byte and its contract tests pass unchanged.
-
-The profile is data the platform repository carries, for the reason addon.yml is: what a
-check holds a tree to sits in the same git log as the tree. jcloud reads it and never
-fetches one.
-
-Every other line in this block depends on this one.
-
-Not in scope: rendering. JC34 refused generating compose files or routes from a
-manifest, and a second platform is no argument against that decision.
-
 ### §JCT3 Reading nginx routes from nginx -T
 
 agree reads the route from `caddy adapt` JSON (route_json.go) rather than from the

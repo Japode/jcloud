@@ -211,15 +211,20 @@ func DeclaredIn(root string) (Declared, error) {
 		d.Others = append(d.Others, name)
 	}
 
-	found, err := filepath.Glob(filepath.Join(root, "services", "*", "japode.yml"))
+	// Where the manifests sit is the platform's to say (JCT2).
+	prof, err := LoadProfile(root)
+	if err != nil {
+		return d, err
+	}
+	found, err := prof.Services(root)
 	if err != nil {
 		return d, err
 	}
 	if len(found) == 0 {
-		return d, fmt.Errorf("no services/*/japode.yml under %s", root)
+		return d, fmt.Errorf("no %s under %s", prof.Manifest, root)
 	}
-	for _, path := range found {
-		service := filepath.Base(filepath.Dir(path))
+	for _, service := range found {
+		path := filepath.Join(root, prof.ManifestPath(service))
 		d.Services = append(d.Services, service)
 
 		// A manifest that will not parse is `jcloud check`'s to report, and it has

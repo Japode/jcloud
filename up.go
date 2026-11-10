@@ -131,11 +131,11 @@ func envKeys(body string) map[string]bool {
 
 // pinnedDigest reads one service's image out of the deploy's own state file.
 //
-// `<SCREAM>_IMAGE=` is scripts/deploy.sh's image_var() spelling, which SCREAM already
-// derives. Absent is not an error: a service that has never been deployed has no
-// digest, and saying so is this command's job.
-func pinnedDigest(m *Manifest, body string) string {
-	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(m.SCREAM()+"_IMAGE") + `=(.+)$`)
+// The variable is the profile's image_var, which on Japode is `<SCREAM>_IMAGE=`,
+// scripts/deploy.sh's image_var() spelling. Absent is not an error: a service that
+// has never been deployed has no digest, and saying so is this command's job.
+func pinnedDigest(prof *Profile, m *Manifest, body string) string {
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(prof.ImageVarOf(m)) + `=(.+)$`)
 	if match := re.FindStringSubmatch(body); match != nil {
 		return strings.TrimSpace(match[1])
 	}
@@ -212,8 +212,8 @@ func (p *Published) why(service string) string {
 
 // Assess answers for one manifest against one env file's keys, one state file, and
 // the publisher's record when one was gathered.
-func Assess(m *Manifest, keys map[string]bool, imagesEnv string, pub *Published) Readiness {
-	r := Readiness{Service: m.Name, Pinned: pinnedDigest(m, imagesEnv)}
+func Assess(prof *Profile, m *Manifest, keys map[string]bool, imagesEnv string, pub *Published) Readiness {
+	r := Readiness{Service: m.Name, Pinned: pinnedDigest(prof, m, imagesEnv)}
 	if pub != nil {
 		r.Asked = true
 		if ref, ok := pub.Ref[m.Name]; ok {
@@ -266,11 +266,18 @@ func up(args []string) int {
 			args = args[1:]
 		}
 	}
+	// Read before anything else, because every path below that the caller did not
+	// name is one it names (JCT2).
+	prof, err := LoadProfile(root)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "jcloud up: %v\n", err)
+		return 2
+	}
 	if envPath == "" {
 		envPath = filepath.Join(root, ".env")
 	}
 	if statePath == "" {
-		statePath = filepath.Join(root, ".deploy-state", "images.env")
+		statePath = filepath.Join(root, filepath.FromSlash(prof.PinFile))
 	}
 
 	envBody, err := os.ReadFile(envPath)
@@ -310,20 +317,18 @@ func up(args []string) int {
 	}
 
 	if len(services) == 0 {
-		found, err := filepath.Glob(filepath.Join(root, "services", "*", "japode.yml"))
+		found, err := prof.Services(root)
 		if err != nil || len(found) == 0 {
-			fmt.Fprintf(os.Stderr, "jcloud up: no services/*/japode.yml under %s\n", root)
+			fmt.Fprintf(os.Stderr, "jcloud up: no %s under %s\n", prof.Manifest, root)
 			return 2
 		}
-		for _, path := range found {
-			services = append(services, filepath.Base(filepath.Dir(path)))
-		}
+		services = found
 	}
 
 	keys := envKeys(string(envBody))
 	blocked := 0
 	for _, service := range services {
-		path := filepath.Join(root, "services", service, "japode.yml")
+		path := filepath.Join(root, prof.ManifestPath(service))
 		data, err := os.ReadFile(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s: %v\n", service, err)
@@ -347,7 +352,7 @@ func up(args []string) int {
 			blocked++
 			continue
 		}
-		if !report(Assess(m, keys, string(stateBody), pub), envPath) {
+		if !report(prof, Assess(prof, m, keys, string(stateBody), pub), envPath) {
 			blocked++
 		}
 	}
@@ -364,7 +369,7 @@ func up(args []string) int {
 }
 
 // report prints one service's answer and says whether it was ready.
-func report(r Readiness, envPath string) bool {
+func report(prof *Profile, r Readiness, envPath string) bool {
 	for _, key := range r.Fixed {
 		// Not a failure: the deploy ignores it. Worth saying, because somebody set it.
 		fmt.Printf("  \033[33m!\033[0m %s: %s is set in %s and the manifest fixes that value — it is ignored\n",
@@ -377,7 +382,7 @@ func report(r Readiness, envPath string) bool {
 			// It is the one thing a report about readiness can say that nobody could
 			// have derived from this machine alone.
 			fmt.Printf("      its CI has since published %s%s — deploy it with:\n", shortDigest(r.Published), tagList(r.Tags))
-			fmt.Printf("      %s\n", deployCommand(r.Service, r.Published))
+			fmt.Printf("      %s\n", prof.DeployCommand(r.Service, r.Published))
 		}
 		return true
 	}
@@ -385,10 +390,11 @@ func report(r Readiness, envPath string) bool {
 	for _, key := range r.Missing {
 		fmt.Fprintf(os.Stderr, "      %s is declared and not in %s — add it to the SERVICES_ENV secret\n", key, filepath.Base(envPath))
 		// On the diff where somebody can act on it, the way check-layout.sh does.
-		fmt.Printf("::error::%s is declared by services/%s/japode.yml and missing from the configuration\n", key, r.Service)
+		fmt.Printf("::error::%s is declared by %s and missing from the configuration\n",
+			key, filepath.ToSlash(prof.ManifestPath(r.Service)))
 	}
 	if r.Pinned == "" {
-		reportUnpinned(r)
+		reportUnpinned(prof, r)
 	}
 	return false
 }
@@ -396,7 +402,7 @@ func report(r Readiness, envPath string) bool {
 // reportUnpinned is the three answers to "there is no digest on this machine", and
 // they are three because the thing to do about each is different: gather the record,
 // go and look at the service's CI, or run one command.
-func reportUnpinned(r Readiness) {
+func reportUnpinned(prof *Profile, r Readiness) {
 	switch {
 	case !r.Asked:
 		fmt.Fprintf(os.Stderr, "      no image pinned — its CI has to publish one, and the deploy takes the digest from there (JC8)\n")
@@ -408,21 +414,19 @@ func reportUnpinned(r Readiness) {
 		// the party that pushed it, and the command below is the deploy's own
 		// arguments rather than a sentence about them.
 		fmt.Fprintf(os.Stderr, "      no image pinned, and its CI published %s%s — deploy it with:\n", shortDigest(r.Published), tagList(r.Tags))
-		fmt.Fprintf(os.Stderr, "      %s\n", deployCommand(r.Service, r.Published))
+		fmt.Fprintf(os.Stderr, "      %s\n", prof.DeployCommand(r.Service, r.Published))
 	}
 }
 
-// deployCommand is what scripts/deploy.sh is called with, spelled the way it reads
-// its two variables — printed, never run.
+// The deploy command is the profile's (Profile.DeployCommand): on Japode it is what
+// scripts/deploy.sh is called with, spelled the way it reads its two variables —
+// printed, never run.
 //
 // Printed because this build shells out to nothing and because the deploy is the one
 // thing that brings anything up: a reporter that could start it is a second deploy
 // path, and JC1 already settled that there is one. Copyable in a single selection,
 // which is the only interface a person needs between reading the answer and acting
 // on it.
-func deployCommand(service, image string) string {
-	return fmt.Sprintf("DEPLOY_SERVICE=%s DEPLOY_IMAGE=%s bash scripts/deploy.sh %s", service, image, service)
-}
 
 // tagList names the tags the resolved version carries, so a reader can tell which
 // build was picked without going to the package page. Parenthesised and never the

@@ -6,6 +6,8 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
+- ✅ **JCT2** **jcloud reads only the Japode tree: manifest glob, route path, container prefix and pin file are constants** — jcloud.yml at a platform root names its manifest, route, container, image variable, pin file, deploy and addon paths; absent, jcloud reads the Japode layout (design recorded in `profile.go`).
+
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
 - ✅ **JCT11** **jcloud has no product page, so it can be found only by someone already inside the repository** — site/ holds a prerendered EN and PT product page with canonical and hreflang, whose hero shows a real jcloud run on a generic demo manifest (design recorded in `site/README.md`).
