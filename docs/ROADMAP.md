@@ -14,10 +14,24 @@
 - 💭 **JCT9** (deps: JCT3, JCT4) **One product instanced per client silo needs one manifest per client, though only the host and the key differ** — Viglet Cloud renders per-client Turing, Shio and Dumont from clients.yaml, and a manifest per copy would be the drift jcloud exists to stop. → §JCT9
 - 📋 **JCT10** (deps: JCT3, JCT4, JCT5, JCT6, JCT7, JCT8) **Contract tests read only a Japode checkout, so nothing proves a second platform still agrees after a jcloud change** — Applying jcloud to Viglet Cloud is the acceptance test for this block, and it has to run in jcloud CI rather than once by hand. → §JCT10
 
+## Block C — The product page: jcloud on japode.com/jcloud/
+
+- 📋 **JCT11** (deps: —) **jcloud has no product page, so it can be found only by someone already inside the repository** — Every other Japode product has a public page on GitHub Pages, and a README is not where a newcomer decides to try a tool. → §JCT11
+- 📋 **JCT12** (deps: JCT11) **The page cannot show what jcloud catches, since no real output of a check exists outside a terminal** — A refusal next to the manifest that caused it explains the tool faster than any feature list, and only captured output stays true. → §JCT12
+- 📋 **JCT13** (deps: JCT11) **The page gives no way to install or run jcloud, so a reader convinced by it has nowhere to go** — The release archives, go install and the CI step are the action the page exists to lead to. → §JCT13
+- 📋 **JCT14** (deps: JCT11) **Nothing builds or publishes site/, so the page exists only on the machine it was written on** — GitHub Pages serves the repository at japode.com/jcloud/ once a workflow deploys it, and the build must be gated before anyone publishes. → §JCT14
+- 📋 **JCT15** (deps: JCT11, JCT14) **The page declares no canonical, social card or link to Japode, so search and shares lose it** — A page that search engines cannot attribute and a link that unfurls blank are the two ways a product page goes unread. → §JCT15
+
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
   manifests for Turing, Shio and Dumont, and the check runs green there in jcloud CI
   while the Japode platform stays green unchanged.
+
+## Done when — Block C
+
+- **japode.com/jcloud/ is live in both languages** The Pages deploy from site.yml serves
+  /jcloud/ and /jcloud/pt/, every transcript on it was captured from a released jcloud,
+  and the README links to it.
 
 ## Non-goals

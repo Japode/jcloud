@@ -165,3 +165,76 @@ The block is finished when Viglet Cloud carries a jcloud.yml and manifests for t
 shio and dumont, and `jcloud agree` passes there. That adoption is the Viglet Cloud
 repository's work, filed in its own roadmap; this line is the half that keeps it passing
 after every jcloud change.
+
+## Block C — The product page: jcloud on japode.com/jcloud/
+
+### §JCT11 JCT11 — a site/ workspace and the hero, after Revelei
+
+jcloud has a README and a Releases page, and nothing a person who has never heard of it
+can land on. The other Japode and Alegauss products each have a page on GitHub Pages;
+Revelei's (`d:/git/alegauss/revelei/site`) is the model to follow.
+
+Build a `site/` workspace beside the Go module, after Revelei's: Vite + React +
+TypeScript + Tailwind v4, the chrome (nav, footer, buttons, theme toggle) and tokens
+from `@viglet/viglet-design-system/site`, a prerender that writes English at `/jcloud/`
+and Portuguese at `/jcloud/pt/` with their own title, description, canonical, `<html
+lang>` and hreflang by replace-or-throw. Every word lives in `src/content.ts`, both
+languages under one type, so a section cannot exist in only one.
+
+`ci/check.sh` and the Go build must neither build nor need `site/`; `npm run build` is
+the site's own gate. This task is the scaffold and a hero that says what jcloud is in
+one sentence: a check that a service manifest agrees with the files deployed beside it.
+
+On ship: the layout and the commands move into `site/README.md`.
+
+### §JCT12 JCT12 — what each verb catches, in real output
+
+The reader has to see what jcloud catches before reading how. Revelei opens on real
+before and after images made by the app; jcloud's equivalent is real terminal output.
+
+Show each verb (check, agree, compare, survey, up, env) with one manifest fragment and
+the exact output jcloud prints for it, including a refusal with its `::error file=`
+annotation and exit code 1. The transcripts are captured by running a released jcloud
+against a fixture tree, by a script in `site/scripts/`, and committed with the release
+they came from, never typed by hand: copy that drifts from the binary is the drift
+jcloud exists to stop.
+
+Then the shape of the platform: manifest in the service repo, compose file, route,
+backup.conf and .env.example in the platform, jcloud between them. One diagram, both
+themes.
+
+### §JCT13 JCT13 — install and the CI step
+
+The README's three ways to install (a release archive, `go install`, the pinned build
+the platform does) are the call to action and belong on the page, with the GitHub
+Actions use that is jcloud's main home: a step that runs `jcloud agree` and fails the
+PR.
+
+The release link points at `releases/latest`, never a fixed tag, so the page does not go
+stale on each `v*` tag. The version shown, if any, is read at build time from the latest
+tag, not written in `content.ts`.
+
+### §JCT14 JCT14 — the Pages workflow
+
+Revelei's `.github/workflows/site.yml` is the template: the build is the gate on every
+push and pull request that touches `site/**`, and the deploy to Pages fires on
+`workflow_dispatch` only, from the bytes the gate built rather than a second build. The
+Pages grants live on the deploy job alone; the gate runs with `contents: read`.
+
+The existing Go workflows must ignore `site/**`, and site.yml must ignore everything
+else, so a site change never runs the Go gate and the reverse.
+
+One-time repository setting, recorded in the workflow header: Settings, Pages, Source:
+GitHub Actions. The page is then served at japode.com/jcloud/, which Pages derives from
+the repository name; `vite.config.ts` carries the same `/jcloud/` base.
+
+### §JCT15 JCT15 — discoverability and the Japode family
+
+A page nobody can find or share is half a page. Following Revelei (PB49, PB50):
+canonical, og:url, hreflang, sitemap and robots.txt name https://japode.com/jcloud/; the
+prerender rasterises `og.png` and the touch icon; JSON-LD declares a SoftwareApplication
+with the release as its download; the nav carries a "part of Japode" chip to the
+storefront and the footer a "More from Japode" link.
+
+The README and the GitHub repository's website field point at the page, so the two ways
+in lead to each other.

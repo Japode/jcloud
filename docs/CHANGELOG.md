@@ -6,3 +6,5 @@
 
 ## Block B — A second platform: jcloud checks a tree that is not the Japode one
 
+## Block C — The product page: jcloud on japode.com/jcloud/
+
