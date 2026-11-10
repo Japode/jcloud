@@ -1,0 +1,210 @@
+@import "tailwindcss";
+/* The ground, the type and the colours are the design system's: tokens.css keyed by
+   data-tone="cool" on <html> and data-theme for the mode, and site.css for the nav, footer and
+   buttons. The layout below is jcloud's own: a command-line tool shows itself in a terminal, so
+   the hero's stage is a window with the manifest and the run. No webfont is fetched. */
+@import "@viglet/viglet-design-system/tokens.css";
+@import "@viglet/viglet-design-system/site.css";
+
+:root {
+  /* The terminal stays dark in both themes: a terminal that turned white with the page would
+     stop reading as one. The green and red are the ones jcloud prints with. */
+  --term: #0f1115;
+  --term-raised: #171a21;
+  --term-line: rgba(222, 226, 235, 0.1);
+  --term-text: #dfe3ea;
+  --term-dim: #8b93a3;
+  --term-ok: #4ade80;
+  --term-err: #f87171;
+  --term-key: #fdba74;
+  --wrap: 1180px;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html {
+  scroll-behavior: smooth;
+}
+.wrap {
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+@media (max-width: 560px) {
+  .wrap {
+    padding: 0 16px;
+  }
+  /* The language and the theme stay in the bar; the download is the hero's first button. */
+  .vg-site-nav .vg-site-btn-primary {
+    display: none;
+  }
+  .vg-site-nav .vg-site-wrap {
+    padding: 0 16px;
+    gap: 10px;
+  }
+}
+
+.eyebrow {
+  color: var(--vg-brand);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+
+/* ============================================================================
+   Hero: what it is, then a real run
+   ============================================================================ */
+.hero {
+  position: relative;
+  padding: 72px 0 96px;
+  overflow: hidden;
+}
+.hero-glow {
+  position: absolute;
+  inset: -25% -10% auto auto;
+  width: 70vw;
+  height: 70vw;
+  max-width: 900px;
+  max-height: 900px;
+  background: radial-gradient(closest-side, color-mix(in oklab, var(--vg-brand) 22%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.hero-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
+  gap: 56px;
+  align-items: center;
+}
+@media (max-width: 980px) {
+  .hero {
+    padding: 48px 0 72px;
+  }
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 40px;
+  }
+}
+.hero h1 {
+  font-size: clamp(2.2rem, 5vw, 3.6rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+  margin-bottom: 22px;
+  text-wrap: balance;
+}
+.hero h1 .accent {
+  display: block;
+  background: linear-gradient(90deg, #f97316, #fdba74);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-sub {
+  color: var(--vg-muted-foreground);
+  font-size: 1.12rem;
+  line-height: 1.65;
+  max-width: 560px;
+  margin-bottom: 30px;
+}
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+.hero-pills {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hero-pills li {
+  font-size: 0.82rem;
+  color: var(--vg-muted-foreground);
+  border: 1px solid var(--vg-border);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+/* The window: the manifest above, the run below. */
+.hero-stage {
+  min-width: 0;
+}
+.window {
+  background: var(--term);
+  border: 1px solid var(--term-line);
+  border-radius: 14px;
+  box-shadow: 0 30px 60px -24px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+}
+.window-bar {
+  display: flex;
+  gap: 7px;
+  padding: 12px 14px;
+  background: var(--term-raised);
+  border-bottom: 1px solid var(--term-line);
+}
+.window-bar span {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: rgba(222, 226, 235, 0.18);
+}
+.pane {
+  padding: 14px 18px 16px;
+}
+.pane-term {
+  border-top: 1px solid var(--term-line);
+  background: color-mix(in oklab, var(--term) 80%, black);
+}
+.pane-label {
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--term-dim);
+  margin-bottom: 8px;
+}
+.code {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--term-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.code-line {
+  display: block;
+}
+.term .t-prompt {
+  color: var(--term-text);
+}
+.term .t-dollar {
+  color: var(--term-key);
+  user-select: none;
+}
+.term .t-ok {
+  color: var(--term-ok);
+}
+.term .t-err {
+  color: var(--term-err);
+}
+.term .t-out {
+  color: var(--term-dim);
+}
+.hero-stage figcaption {
+  margin-top: 12px;
+  font-size: 0.84rem;
+  color: var(--vg-muted-foreground);
+}

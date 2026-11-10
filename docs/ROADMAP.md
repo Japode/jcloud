@@ -16,11 +16,10 @@
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-- 📋 **JCT11** (deps: —) **jcloud has no product page, so it can be found only by someone already inside the repository** — Every other Japode product has a public page on GitHub Pages, and a README is not where a newcomer decides to try a tool. → §JCT11
-- 📋 **JCT12** (deps: JCT11) **The page cannot show what jcloud catches, since no real output of a check exists outside a terminal** — A refusal next to the manifest that caused it explains the tool faster than any feature list, and only captured output stays true. → §JCT12
-- 📋 **JCT13** (deps: JCT11) **The page gives no way to install or run jcloud, so a reader convinced by it has nowhere to go** — The release archives, go install and the CI step are the action the page exists to lead to. → §JCT13
-- 📋 **JCT14** (deps: JCT11) **Nothing builds or publishes site/, so the page exists only on the machine it was written on** — GitHub Pages serves the repository at japode.com/jcloud/ once a workflow deploys it, and the build must be gated before anyone publishes. → §JCT14
-- 📋 **JCT15** (deps: JCT11, JCT14) **The page declares no canonical, social card or link to Japode, so search and shares lose it** — A page that search engines cannot attribute and a link that unfurls blank are the two ways a product page goes unread. → §JCT15
+- 📋 **JCT12** (deps: JCT11 ✅) **The page cannot show what jcloud catches, since no real output of a check exists outside a terminal** — A refusal next to the manifest that caused it explains the tool faster than any feature list, and only captured output stays true. → §JCT12
+- 📋 **JCT13** (deps: JCT11 ✅) **The page gives no way to install or run jcloud, so a reader convinced by it has nowhere to go** — The release archives, go install and the CI step are the action the page exists to lead to. → §JCT13
+- 📋 **JCT14** (deps: JCT11 ✅) **Nothing builds or publishes site/, so the page exists only on the machine it was written on** — GitHub Pages serves the repository at japode.com/jcloud/ once a workflow deploys it, and the build must be gated before anyone publishes. → §JCT14
+- 📋 **JCT15** (deps: JCT11 ✅, JCT14) **The page declares no canonical, social card or link to Japode, so search and shares lose it** — A page that search engines cannot attribute and a link that unfurls blank are the two ways a product page goes unread. → §JCT15
 
 ## Done when — Block B
 

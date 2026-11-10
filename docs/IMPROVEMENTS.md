@@ -168,25 +168,6 @@ after every jcloud change.
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
-### §JCT11 JCT11 — a site/ workspace and the hero, after Revelei
-
-jcloud has a README and a Releases page, and nothing a person who has never heard of it
-can land on. The other Japode and Alegauss products each have a page on GitHub Pages;
-Revelei's (`d:/git/alegauss/revelei/site`) is the model to follow.
-
-Build a `site/` workspace beside the Go module, after Revelei's: Vite + React +
-TypeScript + Tailwind v4, the chrome (nav, footer, buttons, theme toggle) and tokens
-from `@viglet/viglet-design-system/site`, a prerender that writes English at `/jcloud/`
-and Portuguese at `/jcloud/pt/` with their own title, description, canonical, `<html
-lang>` and hreflang by replace-or-throw. Every word lives in `src/content.ts`, both
-languages under one type, so a section cannot exist in only one.
-
-`ci/check.sh` and the Go build must neither build nor need `site/`; `npm run build` is
-the site's own gate. This task is the scaffold and a hero that says what jcloud is in
-one sentence: a check that a service manifest agrees with the files deployed beside it.
-
-On ship: the layout and the commands move into `site/README.md`.
-
 ### §JCT12 JCT12 — what each verb catches, in real output
 
 The reader has to see what jcloud catches before reading how. Revelei opens on real

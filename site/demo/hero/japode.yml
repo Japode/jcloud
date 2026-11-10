@@ -1,0 +1,32 @@
+# The hero's manifest: a demo service, not one Japode runs. The page shows these lines and
+# the output `jcloud check japode.yml` prints for them, run from this directory.
+version: 1
+
+name: notes
+image: ghcr.io/example/notes
+
+port: 8080
+
+health:
+  path: /healthz
+  probe: curl
+  start_period: 10s
+
+volumes:
+  - name: data
+    path: /data
+    sqlite: [notes.db]
+
+routes:
+  - hosts: [notes.example.com]
+    max_body: 2MB
+
+env:
+  - name: PUBLIC_URL
+    default: https://notes.example.com
+    doc: The address the application puts in its links.
+  - name: SESSION_SECRET
+    secret: true
+    doc: Signs the session cookie. Set in the platform's secrets only.
+
+needs: []

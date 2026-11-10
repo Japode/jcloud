@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The mark: two sheets, the manifest and a file deployed beside it, overlapping where they
+       have to agree, and the check that says they do. Orange on the cool tone's dark ground. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#262626"/>
+      <stop offset="1" stop-color="#0f0f0f"/>
+    </linearGradient>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f97316"/>
+      <stop offset="1" stop-color="#fdba74"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#tile)"/>
+  <rect x="96" y="96" width="200" height="260" rx="28" fill="none" stroke="#dedede" stroke-width="24" opacity="0.55"/>
+  <rect x="216" y="156" width="200" height="260" rx="28" fill="#171717" stroke="url(#brand)" stroke-width="24"/>
+  <path d="M262 290 L302 330 L372 250" fill="none" stroke="url(#brand)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

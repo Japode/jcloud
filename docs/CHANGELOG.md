@@ -8,3 +8,4 @@
 
 ## Block C — The product page: jcloud on japode.com/jcloud/
 
+- ✅ **JCT11** **jcloud has no product page, so it can be found only by someone already inside the repository** — site/ holds a prerendered EN and PT product page with canonical and hreflang, whose hero shows a real jcloud run on a generic demo manifest (design recorded in `site/README.md`).

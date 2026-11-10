@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" data-tone="cool">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/jcloud/favicon.svg" />
+
+    <!--
+      The theme follows the OS, and a stored choice wins over it. The design system's
+      pre-paint script replaces the anchor below, inlined by vite.config.ts.
+    -->
+    <!--theme-script-->
+
+    <title>jcloud: the manifest and the files that have to agree with it</title>
+    <meta
+      name="description"
+      content="jcloud checks a service's japode.yml against its Dockerfile, Caddyfile and workflows, and against the compose file, route, backup.conf and .env.example the platform deploys beside it."
+    />
+    <!--hreflang-->
+
+    <!--
+      scripts/prerender.mjs patches the title, description and canonical by replace-or-throw,
+      inlines the rendered body into the root element, and per language sets the html lang and
+      replaces the hreflang anchor above with the alternate links. No closing head or script
+      token may appear in a comment here.
+    -->
+  </head>
+  <body class="vg-site">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
