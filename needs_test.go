@@ -250,24 +250,30 @@ func TestNeedlessServiceIsUnaffected(t *testing.T) {
 // Nothing else asserts it: an addon is read by the service that names it, so one
 // nobody needs yet is a file with no check on it at all.
 func TestCommittedAddons(t *testing.T) {
-	paths := platformGlob(t, "addons/*/addon.yml")
-	if len(paths) == 0 {
-		t.Skip("no addons/*/addon.yml in this tree")
-	}
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
+	eachPlatform(t, func(t *testing.T, root string, prof *Profile) {
+		paths := addonPaths(t, root, prof)
+		if len(paths) == 0 {
+			t.Skipf("no %s in %s", prof.Addon, root)
 		}
-		a, err := ParseAddon(data)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
+		// The type is read back through the template, as the manifest's name is:
+		// the file's place says what it is, and the file says it again.
+		before, after, _ := strings.Cut(filepath.ToSlash(prof.Addon), "{type}")
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			a, err := ParseAddon(data)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			if p := a.Validate(path); len(p) != 0 {
+				t.Errorf("%s:\n  %s", path, strings.Join(p, "\n  "))
+			}
+			rel, _ := filepath.Rel(root, path)
+			if want := strings.TrimSuffix(strings.TrimPrefix(filepath.ToSlash(rel), before), after); a.Type != want {
+				t.Errorf("%s declares type %q and sits where %s puts type %q", path, a.Type, prof.Addon, want)
+			}
 		}
-		if p := a.Validate(path); len(p) != 0 {
-			t.Errorf("%s:\n  %s", path, strings.Join(p, "\n  "))
-		}
-		if want := filepath.Base(filepath.Dir(path)); a.Type != want {
-			t.Errorf("%s declares type %q and sits in addons/%s/", path, a.Type, want)
-		}
-	}
+	})
 }

@@ -453,31 +453,34 @@ func TestBackupConfIsOptionalWhenNothingNeedsIt(t *testing.T) {
 	}
 }
 
-// The platform's committed tree has to agree. The platform's scripts/check-jcloud.sh
-// adapts the real Caddyfile into .deploy-state/ first, so the route half is checked
-// there; without it `go test` has no caddy and says so rather than passing on a
-// weaker check.
+// Every platform's committed tree has to agree. Its own check script produces the
+// route configuration into .deploy-state/ first (platform_test.go names where),
+// and the compose model when it builds one; without the routes `go test` has no
+// caddy or nginx and says so rather than passing on a weaker check.
 func TestCommittedManifestsAgree(t *testing.T) {
-	root := platformRoot(t)
-	paths := platformGlob(t, "services/*/japode.yml")
-	if len(paths) == 0 {
-		t.Skip("no services/*/japode.yml in " + root)
-	}
-	adapted, err := os.ReadFile(filepath.Join(root, ".deploy-state", "caddy-adapt.json"))
-	if err != nil {
-		t.Skip("no .deploy-state/caddy-adapt.json in " + root + " — its scripts/check-jcloud.sh adapts it first")
-	}
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
+	eachPlatform(t, func(t *testing.T, root string, prof *Profile) {
+		paths := manifestPaths(t, root, prof)
+		if len(paths) == 0 {
+			t.Skipf("no %s in %s", prof.Manifest, root)
 		}
-		m, err := Parse(data)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
+		var in AgreeInputs
+		var err error
+		if in.Routes, err = os.ReadFile(filepath.Join(root, filepath.FromSlash(routesFile[prof.RouteKind]))); err != nil {
+			t.Skipf("no %s in %s — its own check script produces it first", routesFile[prof.RouteKind], root)
 		}
-		if p := m.AgreeWith(root, adapted); len(p) != 0 {
-			t.Errorf("%s does not agree with the files beside it:\n  %s", path, strings.Join(p, "\n  "))
+		in.Compose, _ = os.ReadFile(filepath.Join(root, filepath.FromSlash(composeFile)))
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			m, err := Parse(data)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			if p := m.AgreeFrom(root, in); len(p) != 0 {
+				t.Errorf("%s does not agree with the files beside it:\n  %s", path, strings.Join(p, "\n  "))
+			}
 		}
-	}
+	})
 }

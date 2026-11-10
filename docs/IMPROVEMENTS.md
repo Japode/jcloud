@@ -6,17 +6,24 @@
 
 ### §JCT10 A second platform in the contract tests
 
-The TestCommitted tests read the tree JCLOUD_PLATFORM names and assert facts about
-Japode's own manifests and addons and the wording of two of its scripts. With the
-profile from JCT2 they read `jcloud.yml` from that tree and assert only what the profile
-says that platform has. ci/check.sh accepts a list,
-`JCLOUD_PLATFORM=../cloud:../../viglet/cloud`, and runs the suite once per tree,
-skipping an absent tree as it does today.
+The harness landed: platform_test.go reads JCLOUD_PLATFORM as a list, runs every
+TestCommitted test once per tree through that tree's jcloud.yml, keeps the tests about
+Japode's own scripts to a tree with no jcloud.yml, and ci/check.sh mounts each tree in
+`JCLOUD_PLATFORM=../cloud:../../viglet/cloud` and skips an absent one.
 
-The block is finished when Viglet Cloud carries a jcloud.yml and manifests for turing,
-shio and dumont, and `jcloud agree` passes there. That adoption is the Viglet Cloud
-repository's work, filed in its own roadmap; this line is the half that keeps it passing
-after every jcloud change.
+What is left is jcloud's own CI. .github/workflows/ci.yml checks out no platform, so
+there every contract test skips. Japode/cloud and openviglet/cloud are both private, so
+checking them out needs a read-only token as a repository secret (a fine-grained PAT
+with contents:read on the two, or a GitHub App installed on both orgs). With it, ci.yml
+gains two `actions/checkout` steps into sibling paths and passes their list to
+ci/check.sh. Which credential, and who owns it, is the user's decision.
+
+Before Viglet Cloud's tree is useful there it needs its own adoption, filed in its own
+roadmap: a jcloud.yml, manifests for turing, shio and dumont, its check script writing
+.deploy-state/nginx-T.txt and .deploy-state/compose-config.json (platform_test.go names
+them), and JCT18 and JCT20 shipped here. Until it carries a jcloud.yml it is read as the
+Japode layout and fails the Japode-script tests, which is the right answer for a tree
+that has not said what it is.
 
 ### §JCT18 A route states its auth gate
 

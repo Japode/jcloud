@@ -259,21 +259,23 @@ func TestTwoRoutesNeedLogNames(t *testing.T) {
 // The manifests committed to the platform have to pass. This is the test that would
 // have caught the schema and the platform repository disagreeing.
 func TestCommittedManifests(t *testing.T) {
-	paths := platformGlob(t, "services/*/japode.yml")
-	if len(paths) == 0 {
-		t.Skip("no services/*/japode.yml in this tree")
-	}
-	for _, path := range paths {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
+	eachPlatform(t, func(t *testing.T, root string, prof *Profile) {
+		paths := manifestPaths(t, root, prof)
+		if len(paths) == 0 {
+			t.Skipf("no %s in %s", prof.Manifest, root)
 		}
-		m, err := Parse(data)
-		if err != nil {
-			t.Fatalf("%s: %v", path, err)
+		for _, path := range paths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			m, err := Parse(data)
+			if err != nil {
+				t.Fatalf("%s: %v", path, err)
+			}
+			if p := m.Validate(); len(p) != 0 {
+				t.Errorf("%s:\n  %s", path, strings.Join(p, "\n  "))
+			}
 		}
-		if p := m.Validate(); len(p) != 0 {
-			t.Errorf("%s:\n  %s", path, strings.Join(p, "\n  "))
-		}
-	}
+	})
 }

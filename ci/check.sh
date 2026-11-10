@@ -13,10 +13,11 @@ set -euo pipefail
 # nothing is unformatted, and `go vet` and the unit tests pass. One thing it reports
 # without failing: a dependency whose newest release needs a newer Go than this pin.
 #
-# The committed-tree tests (TestCommitted*) read a platform repository and skip
-# without one. Set JCLOUD_PLATFORM to a checkout of it to run them too:
+# The committed-tree tests (TestCommitted*) read platform repositories and skip
+# without one. Set JCLOUD_PLATFORM to checkouts of them, `:`-separated, to run
+# them too — each through its own jcloud.yml:
 #
-#   JCLOUD_PLATFORM=../cloud bash ci/check.sh
+#   JCLOUD_PLATFORM=../cloud:../../viglet/cloud bash ci/check.sh
 #
 # The platform's own scripts/check-jcloud.sh also runs `jcloud agree` over every
 # manifest it holds, which covers the same ground.
@@ -37,10 +38,27 @@ if [ -n "${MSYSTEM:-}" ]; then
     ROOT="$(cd "$ROOT" && pwd -W)"
 fi
 
+# JCLOUD_PLATFORM is a `:`-separated list (JCT10): each tree is mounted at
+# /platform/<n> and the contract tests run once per tree, through its own
+# jcloud.yml. A tree that is not there is skipped and said, so a checkout of one
+# platform still runs against it.
 PLATFORM_MOUNT=()
 if [ -n "${JCLOUD_PLATFORM:-}" ]; then
-    platform="$(cd "$JCLOUD_PLATFORM" && { [ -n "${MSYSTEM:-}" ] && pwd -W || pwd; })"
-    PLATFORM_MOUNT=(-v "$platform:/platform:ro" -e JCLOUD_PLATFORM=/platform)
+    inside=""
+    n=0
+    IFS=: read -r -a trees <<<"$JCLOUD_PLATFORM"
+    for tree in "${trees[@]}"; do
+        [ -n "$tree" ] || continue
+        if [ ! -d "$tree" ]; then
+            printf '    no platform at %s: skipped\n' "$tree"
+            continue
+        fi
+        platform="$(cd "$tree" && { [ -n "${MSYSTEM:-}" ] && pwd -W || pwd; })"
+        PLATFORM_MOUNT+=(-v "$platform:/platform/$n:ro")
+        inside="${inside:+$inside:}/platform/$n"
+        n=$((n + 1))
+    done
+    [ -z "$inside" ] || PLATFORM_MOUNT+=(-e "JCLOUD_PLATFORM=$inside")
 fi
 
 # shellcheck disable=SC2016  # every $ below is the inner shell's

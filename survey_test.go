@@ -103,7 +103,27 @@ func TestAnUnobservedDigestIsNotAMatch(t *testing.T) {
 // serving for weeks — as something nobody declared. The edge is the same shape from
 // the other side: it is in the top-level compose file and deliberately has no manifest.
 func TestAddonsAndTheEdgeAreDeclaredAndNotStrangers(t *testing.T) {
-	d, err := DeclaredIn(platformRoot(t))
+	eachPlatform(t, func(t *testing.T, root string, _ *Profile) {
+		d, err := DeclaredIn(root)
+		if err != nil {
+			t.Fatalf("reading the platform repository: %v", err)
+		}
+		// What holds on every platform: a server running exactly what it declares
+		// is silence.
+		o := &Observed{Containers: map[string]string{}, Pinned: map[string]string{}, Running: map[string]string{}}
+		for _, name := range append(append([]string{}, d.Services...), d.Others...) {
+			o.Containers[name] = "healthy"
+		}
+		if got := SurveyAgainst(d, o); len(got) != 0 {
+			t.Fatalf("a server running everything %s declares reported: %+v", root, got)
+		}
+	})
+	// And the cases this was written for, by name, on the Japode layout.
+	japodePlatform(t, func(t *testing.T, root string) { japodeDeclared(t, root) })
+}
+
+func japodeDeclared(t *testing.T, root string) {
+	d, err := DeclaredIn(root)
 	if err != nil {
 		t.Fatalf("reading the platform repository: %v", err)
 	}
