@@ -153,3 +153,7 @@ fails when they differ.
 Some tests are contracts with the platform repository: its committed manifests and addons,
 its top-level compose file, and two of its scripts. They read the checkout named by
 `JCLOUD_PLATFORM` and skip without it.
+
+## License
+
+[Apache-2.0](LICENSE).
