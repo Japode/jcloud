@@ -67,6 +67,11 @@ for (const route of ROUTES) {
     html = html.replace(from, () => to);
   }
   writeFileSync(file, html);
+
+  // Google Analytics loads only after consent (JCT31): the tag must be in no built page, and
+  // the footer must carry the way back to the banner. Either one missing fails the build.
+  if (html.includes("googletagmanager")) throw new Error(`${file} loads the analytics tag before consent`);
+  if (!html.includes('class="consent-settings"')) throw new Error(`${file} lost the footer's analytics settings`);
 }
 
 console.log(`prerender: ${written.length} route(s) in ${ROUTES.map((r) => r.htmlLang).join(" and ")}, sitemap.xml and robots.txt written to dist/`);

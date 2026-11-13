@@ -133,6 +133,7 @@ type Words = {
     copy: { label: (what: string) => string; copy: string; copied: string };
   };
   footer: { links: { href: string; label: string }[]; disclaimer: string };
+  consent: { label: string; body: string; decline: string; allow: string; settings: string };
 };
 
 export const words: Record<Lang, Words> = {
@@ -267,6 +268,14 @@ export const words: Record<Lang, Words> = {
       ],
       disclaimer: "jcloud is a Japode product and open source. It reads files and reports; only the env verb writes one.",
     },
+    // The banner's words are japode.com's own, since the two pages share one consent.
+    consent: {
+      label: "Analytics consent",
+      body: "This site counts visits with Google Analytics only if you allow it. Nothing is loaded until you choose.",
+      decline: "Decline",
+      allow: "Allow analytics",
+      settings: "Analytics settings",
+    },
   },
   pt: {
     meta: {
@@ -398,6 +407,13 @@ export const words: Record<Lang, Words> = {
         { href: familyHref, label: "Mais da Japode" },
       ],
       disclaimer: "O jcloud é um produto Japode e open source. Ele lê arquivos e informa; só o comando env grava um.",
+    },
+    consent: {
+      label: "Consentimento de análise",
+      body: "Este site conta as visitas com o Google Analytics só se você permitir. Nada é carregado antes da sua escolha.",
+      decline: "Recusar",
+      allow: "Permitir análise",
+      settings: "Configurações de análise",
     },
   },
 };

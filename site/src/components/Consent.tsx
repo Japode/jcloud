@@ -1,0 +1,100 @@
+import { useEffect, useState } from "react";
+import { words, type Lang } from "../content";
+import { useWords } from "../i18n";
+
+// Google Analytics loads only after the visitor allows it, the flow japode.com runs (its JP6).
+// Nothing reaches googletagmanager.com before a choice: the tag is not in the HTML, and this
+// adds it only for "granted". A refusal is remembered as firmly as a consent, and the footer's
+// "Analytics settings" asks again.
+//
+// The key, the ask event and the measurement id are japode.com's on purpose. This page is
+// served from the same origin (japode.com/jcloud/), so the two share one localStorage and one
+// GA4 property, and a visitor who has answered on either has answered for both.
+
+const KEY = "japode-consent";
+const ASK = "japode:consent-ask";
+const MEASUREMENT_ID = "G-X7S1G0PTPY";
+type Choice = "granted" | "denied";
+
+function readChoice(): Choice | null {
+  try {
+    const v = localStorage.getItem(KEY);
+    return v === "granted" || v === "denied" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+let loaded = false;
+function loadAnalytics() {
+  if (loaded) return;
+  loaded = true;
+  const w = window as unknown as { dataLayer: unknown[]; gtag: (...args: unknown[]) => void };
+  w.dataLayer = w.dataLayer || [];
+  w.gtag = function gtag() {
+    // gtag.js reads the arguments object itself, not an array
+    // eslint-disable-next-line prefer-rest-params
+    w.dataLayer.push(arguments);
+  };
+  w.gtag("js", new Date());
+  w.gtag("config", MEASUREMENT_ID);
+  const s = document.createElement("script");
+  s.async = true;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${MEASUREMENT_ID}`;
+  document.head.appendChild(s);
+}
+
+/** The footer's way back to the banner. */
+export function ConsentSettings() {
+  const w = useWords();
+  return (
+    <button type="button" className="consent-settings" onClick={() => window.dispatchEvent(new Event(ASK))}>
+      {w.consent.settings}
+    </button>
+  );
+}
+
+/** Mounted, not hydrated: the prerendered page carries no banner and no tag. */
+export function ConsentBanner({ lang }: Readonly<{ lang: Lang }>) {
+  const w = words[lang].consent;
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    const choice = readChoice();
+    if (choice === "granted") loadAnalytics();
+    if (choice === null) setOpen(true);
+    const ask = () => setOpen(true);
+    window.addEventListener(ASK, ask);
+    return () => window.removeEventListener(ASK, ask);
+  }, []);
+
+  const choose = (choice: Choice) => {
+    try {
+      localStorage.setItem(KEY, choice);
+    } catch {
+      /* private mode: the choice lasts this page */
+    }
+    if (choice === "granted") loadAnalytics();
+    else if (loaded) {
+      // the tag cannot be unloaded from a running page; the next one will not load it
+      (window as unknown as Record<string, boolean>)[`ga-disable-${MEASUREMENT_ID}`] = true;
+    }
+    setOpen(false);
+  };
+
+  if (!open) return null;
+  return (
+    <section className="consent" aria-label={w.label}>
+      <p>{w.body}</p>
+      <div className="consent-actions">
+        {/* SiteButton is an anchor, and these act rather than go somewhere: its classes on a button */}
+        <button type="button" className="vg-site-btn vg-site-btn-ghost" onClick={() => choose("denied")}>
+          {w.decline}
+        </button>
+        <button type="button" className="vg-site-btn vg-site-btn-primary" onClick={() => choose("granted")}>
+          {w.allow}
+        </button>
+      </div>
+    </section>
+  );
+}

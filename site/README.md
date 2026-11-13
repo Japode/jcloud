@@ -32,6 +32,13 @@ that lost an anchor fails the build. It also rasterises `og.png`, the 1200 x 630
 in the cool tone, and `apple-touch-icon.png` from `public/icon.svg`; resvg needs a font on
 disk, which is why `site.yml` installs `fonts-dejavu-core`.
 
+Google Analytics (`G-X7S1G0PTPY`, japode.com's GA4 property) loads only after the visitor
+allows it, by `src/components/Consent.tsx`. The banner is mounted by `main.tsx`, not
+prerendered, and it keeps japode.com's `japode-consent` key and `japode:consent-ask` event:
+the page is served from the same origin, so one answer covers both. The footer's "Analytics
+settings" opens the banner again. The build fails if a page contains `googletagmanager` or
+lost that footer button.
+
 The nav carries a "part of Japode" chip and the footer a "More from Japode" link, both to
 `/`, the storefront at the root of japode.com, as on Revelei's site.
 

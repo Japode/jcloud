@@ -1,6 +1,7 @@
 import { SiteButton, SiteFooter, SiteNav, SiteThemeToggle } from "@viglet/viglet-design-system/site";
 import { asset, familyHref, familyName, languages, pageHref, releasesUrl, repoUrl, THEME_KEY, words, type Lang } from "../content";
 import { useLang, useWords } from "../i18n";
+import { ConsentSettings } from "./Consent";
 
 // The nav and the footer, drawn by the design system's site layer so jcloud sits in the same
 // family as the other product sites. Everything between them is this product's own.
@@ -51,7 +52,8 @@ export function Footer() {
           {w.footer.disclaimer}{" "}
           <a href={repoUrl} rel="noopener">
             github.com/Japode/jcloud
-          </a>
+          </a>{" "}
+          <ConsentSettings />
         </>
       }
     />
