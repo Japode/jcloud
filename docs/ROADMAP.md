@@ -15,8 +15,7 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT36** (deps: JCT33 ✅, JCT34 ✅) **Nothing installs an exported service on a new server; the restore order in DEPLOY.md is followed by hand** — The order is not optional: fespsp's image seeds fresh content on first boot unless the restored database is already there. → §JCT36
-- 📋 **JCT37** (deps: JCT36) **A new server has no GHCR login, so install cannot pull a private image such as fespsp-institucional's** — The platform pulls with GHCR_READ_TOKEN, a read:packages PAT a fresh host lacks, and a failed pull must stop the move before any data lands. → §JCT37
+- 📋 **JCT37** (deps: JCT36 ✅) **A new server has no GHCR login, so install cannot pull a private image such as fespsp-institucional's** — The platform pulls with GHCR_READ_TOKEN, a read:packages PAT a fresh host lacks, and a failed pull must stop the move before any data lands. → §JCT37
 - 📋 **JCT38** (deps: JCT40) **Nothing in jcloud prepares an empty server: docker, the deploy user, modes and firewall are set by a platform script** — The owner wants jcloud to take that job over, so a move needs only jcloud and the archive, and platforms drop their bootstrap scripts. → §JCT38
 - 📋 **JCT40** (deps: —) **jcloud.yml's host: cannot state a deploy user, open ports or kernel settings, so they live only in bootstrap-server.sh** — One declaration has to be what survey checks and what the host is built from, or the bash and the watch drift apart. → §JCT40
 

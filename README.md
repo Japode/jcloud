@@ -3,8 +3,10 @@
 jcloud checks a Japode Cloud service manifest (`japode.yml`) against the files that have
 to agree with it: the service's own Dockerfile, Caddyfile and workflows, and the compose
 file, route, `backup.conf` and `.env.example` the platform deploys beside it. It does not
-render or deploy anything. Two commands write a file: `env`, the encrypted configuration,
-and `export`, one service's platform files packed into an archive for another server.
+render or deploy anything, with one exception: moving a service to another server. Three
+commands write files: `env`, the encrypted configuration; `export`, which packs one
+service's files and data into an archive; and `install`, which unpacks that archive on the
+new server and starts the service.
 
 The product page, with a real run of every verb, is at https://japode.com/jcloud/ (built
 from [`site/`](site/README.md)).
@@ -45,6 +47,10 @@ jcloud export <service> [--root <dir>] -o <f>   run on the host: one service's
                                                 a mount the manifest does not
                                                 declare refuses the export unless
                                                 --leave names it
+jcloud install <archive> [--root <dir>]         run on the target: lay an export
+      [--identity <f>] [--wait-timeout <s>]     down in an empty place, restore
+                                                its data before it starts, start
+                                                it and the edge
 jcloud version
 ```
 

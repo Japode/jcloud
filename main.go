@@ -139,6 +139,11 @@ func main() {
 		// the tree it runs in, like observe, and carries the service's configuration
 		// only sealed to the recipients it is given (JCT33).
 		os.Exit(export(args[1:]))
+	case "install":
+		// export's other end (JCT36): an archive put back on an empty place, in
+		// the order DEPLOY.md's restore needs. It writes the tree and runs docker,
+		// and refuses before writing anything a place that is not empty.
+		os.Exit(install(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
 		// other half of what determines this binary's behaviour, and a report about
@@ -206,7 +211,13 @@ func usage() {
        [--leave <path>] …              its volumes are copied. A mount the
                                        manifest does not declare refuses it,
                                        unless --leave names it
-  jcloud version                      this build, and the schema version
+  jcloud install <archive>             run on the target: refuse a place that
+       [--root <dir>]                  is not empty for the service, lay its
+       [--identity <file>]             files down, merge its keys and pins,
+       [--wait-timeout <seconds>]      restore its volumes and dumps before it
+                                       starts, start it and the edge, and say
+                                       what DNS still has to point here
+  jcloud version                     this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a
 caller who fixes one field and runs again has been sent round a loop this could

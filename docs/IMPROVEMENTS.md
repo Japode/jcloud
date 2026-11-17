@@ -93,25 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT36 jcloud install: lay down, restore, start, prove
-
-`jcloud install <archive> --root <dir> --identity <age key>` runs on the target and
-does, in this order, what docs/DEPLOY.md does by hand:
-
-1. Verify `jcloud-export.json` (schema, checksums), prepare the host from `host:` (JCT38) and pull every pinned digest (JCT37). Refuse a root where the service already has containers or volumes: install is for an empty place, never an overwrite, so it cannot be mistaken for a deploy.
-2. Lay down the files under `--root`; open the index's `env` member and merge its keys into `.env` (mode 600), refusing while `env_missing` or an edge key (ACME_EMAIL) is unset, and its pins into `pin_file`, keeping lines already there.
-3. Create the volumes, untar each one, start only the database needs, wait for their healthchecks, feed each dump in.
-4. Start the service and the edge, and wait for the healthcheck under the same budget a deploy uses.
-5. Report what came back against what the archive recorded: volume sizes, table counts, health. Then `agree` on the laid-down tree.
-
-Step 3 before step 4 is load-bearing. fespsp's entrypoint runs the seed only when `wp
-core is-installed` fails, and the seed rewrites pages. Started on an empty database, it
-installs a demo site and the dump arrives on top of it, with seed media left in uploads.
-
-Not done: DNS. The edge gets its certificate on the first request after the name points
-here; install prints that as the remaining step, with the host names the route answers
-for.
-
 ### §JCT37 install pulls a private image with a registry token
 
 The archive carries pins, not images: the target pulls the same digests the source runs.
