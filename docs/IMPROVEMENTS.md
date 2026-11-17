@@ -173,8 +173,8 @@ one is a refusal unless `--leave <path>` says it is known and meant to stay behi
 the manifest is changed to declare it. The remedy names both doors.
 
 The fix for this service belongs in the platform, not here: a named volume for
-wp-content/plugins in Japode/cloud's compose and manifest (a task for that repository).
-Once it is declared, JCT34 carries it like the uploads.
+wp-content/plugins in Japode/cloud's compose and manifest (cloud JC107). Once it is
+declared, JCT34 carries it like the uploads.
 
 The same check would have caught any service whose state moved to a path nobody
 declared, which is the drift `agree` cannot see because it reads files, not the running
