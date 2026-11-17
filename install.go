@@ -37,7 +37,9 @@
 // install says so. Shipping images inside the archive (`docker save`) is not done:
 // nothing in this move needs a host with no registry access at all.
 //
-// Not done here: preparing the host (JCT38).
+// Before all of it, when the archive's jcloud.yml declares host:, `host apply`
+// prepares the machine (JCT38, host_apply.go), so an empty server needs this
+// command and nothing else.
 package main
 
 import (
@@ -288,6 +290,29 @@ func (p *installPlan) planEnv(root, identity string, files map[string][]byte, ba
 		}
 		text += k + "=" + string(value) + "\n"
 	}
+}
+
+// archiveHost is the host: the archive's jcloud.yml declares, verified with the
+// rest of the archive; the zero Host when it carries no jcloud.yml.
+func archiveHost(archive string) (Host, error) {
+	f, err := os.Open(archive)
+	if err != nil {
+		return Host{}, err
+	}
+	defer f.Close()
+	_, files, err := ReadExport(f)
+	if err != nil {
+		return Host{}, fmt.Errorf("%s: %w", archive, err)
+	}
+	data, ok := files[ProfileFile]
+	if !ok {
+		return Host{}, nil
+	}
+	prof, err := ParseProfile(data)
+	if err != nil {
+		return Host{}, err
+	}
+	return prof.Host, nil
 }
 
 // mergeLines adds the archive's KEY=value lines to the target's, refusing a key
@@ -713,6 +738,16 @@ func runInstall(archive, root, identity string, wait int, login registryLogin, r
 			fmt.Fprintf(os.Stderr, "      %s\n", p)
 		}
 		return 1
+	}
+	// The host first, when the archive's platform declares one: docker has to be
+	// there before anything below can ask it (JCT38).
+	if h, err := archiveHost(archive); err != nil {
+		return refuse("nothing was written", []string{err.Error()})
+	} else if h.declaresSetup() {
+		fmt.Printf("  preparing the host from jcloud.yml's host:\n")
+		if code := applyHostReport(root, h, hostRun); code != 0 {
+			return refuse("the host is not what jcloud.yml declares, so nothing else was done", nil)
+		}
 	}
 	p, problems := planInstall(archive, root, identity, run)
 	if len(problems) > 0 {

@@ -92,28 +92,3 @@ Anything that adoption has to work around is filed here as its own line, the way
 was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
-
-### §JCT38 jcloud host apply: build the server from host:
-
-Decided by the owner: jcloud installs everything on an empty server, and Japode/cloud's
-bootstrap-server.sh is replaced by it rather than kept beside it (cloud task, filed
-there). The duplication is avoided by abstraction: the script's steps become `host:`
-declarations (JCT40), and `jcloud host apply` makes the machine match them.
-
-`sudo jcloud host apply [--root <dir>]`, idempotent, each step a no-op when it already
-holds:
-
-1. Docker engine and the compose plugin, from Docker's own apt repository (Debian and Ubuntu first; another distribution is refused by name, not guessed at), plus each tool in `requires:`.
-2. The user and its groups.
-3. Each path with its mode and owner.
-4. The sysctl entries, in one file under /etc/sysctl.d naming jcloud and each entry's `why:`.
-5. The firewall: SSH is allowed before ufw is enabled, never the other way round. Enabling ufw over SSH without that rule locks the machine away from the person running it, which is why the script today only advises.
-
-Then it runs the checks `survey` would and prints any that still differ.
-
-`install` (JCT36) runs `host apply` first when jcloud.yml declares `host:`, so an empty
-server needs `jcloud install <archive>` and nothing else.
-
-Outside: the GitHub runner registration, the platform's way of deploying and not part of
-a move. A writing verb changes what jcloud is; this one is invoked by a person and never
-by the watch, so the non-goal on unattended repair still holds.

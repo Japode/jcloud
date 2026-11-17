@@ -15,8 +15,6 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT38** (deps: JCT40 ✅) **Nothing in jcloud prepares an empty server: docker, the deploy user, modes and firewall are set by a platform script** — The owner wants jcloud to take that job over, so a move needs only jcloud and the archive, and platforms drop their bootstrap scripts. → §JCT38
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and

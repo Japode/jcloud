@@ -144,6 +144,11 @@ func main() {
 		// the order DEPLOY.md's restore needs. It writes the tree and runs docker,
 		// and refuses before writing anything a place that is not empty.
 		os.Exit(install(args[1:]))
+	case "host":
+		// Makes the machine what jcloud.yml's host: declares (JCT38), in place of
+		// a platform's bootstrap script. Invoked by a person, as root; the watch
+		// never runs it.
+		os.Exit(hostCmd(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
 		// other half of what determines this binary's behaviour, and a report about
@@ -219,8 +224,14 @@ func usage() {
         --registry-user <name>]        what DNS still has to point here. Every
                                        pinned image is pulled first, after a
                                        login with the token when one is given
-                                       (or JCLOUD_REGISTRY_TOKEN and _USER)
-  jcloud version                     this build, and the schema version
+                                       (or JCLOUD_REGISTRY_TOKEN and _USER).
+                                       When the archive's jcloud.yml declares
+                                       host:, host apply runs first
+  jcloud host apply [--root <dir>]     as root: make the machine what host:
+                                       declares (docker and tools, the user,
+                                       paths, sysctl, ufw with SSH allowed
+                                       before it is enabled), then survey it
+  jcloud version                    this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a
 caller who fixes one field and runs again has been sent round a loop this could

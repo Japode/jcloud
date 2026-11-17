@@ -3,10 +3,11 @@
 jcloud checks a Japode Cloud service manifest (`japode.yml`) against the files that have
 to agree with it: the service's own Dockerfile, Caddyfile and workflows, and the compose
 file, route, `backup.conf` and `.env.example` the platform deploys beside it. It does not
-render or deploy anything, with one exception: moving a service to another server. Three
-commands write files: `env`, the encrypted configuration; `export`, which packs one
-service's files and data into an archive; and `install`, which unpacks that archive on the
-new server and starts the service.
+render or deploy anything, with one exception: moving a service to another server. Four
+commands change something: `env`, the encrypted configuration; `export`, which packs one
+service's files and data into an archive; `install`, which unpacks that archive on the new
+server and starts the service; and `host apply`, which prepares an empty server from
+`jcloud.yml`'s `host:`.
 
 The product page, with a real run of every verb, is at https://japode.com/jcloud/ (built
 from [`site/`](site/README.md)).
@@ -52,7 +53,11 @@ jcloud install <archive> [--root <dir>]         run on the target: lay an export
       [--registry-token-file <f>                its data before it starts, start
        --registry-user <name>]                  it and the edge; every pinned
                                                 image is pulled first, logged in
-                                                with the token when one is given
+                                                with the token when one is given;
+                                                host apply runs first when the
+                                                archive's jcloud.yml has host:
+jcloud host apply [--root <dir>]                as root: make the machine what
+                                                host: declares, then survey it
 jcloud version
 ```
 
