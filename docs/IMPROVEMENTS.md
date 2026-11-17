@@ -93,30 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT32 jcloud export: the archive and its file set
-
-`jcloud export <service> [--root <dir>] -o <file>.tar.gz` runs on the source host, in
-the deployed tree, and writes one archive. This task is the skeleton the next ones fill:
-the format and the platform files, no secrets and no data yet.
-
-The file set comes from what `agree` already resolves through jcloud.yml: the manifest,
-its compose file and backup.conf, the route (`route.path` for that name; for nginx, the
-one shared file, flagged as such), each addon a `needs:` names, the top-level compose
-that runs the edge and its Caddyfile, jcloud.yml itself, and the service's lines from
-`pin_file`, so the target pulls the same digests the source runs. Nothing outside the
-root is read, as everywhere else.
-
-At the archive's root sits `jcloud-export.json`: schema version, jcloud version, service
-name, source host, time, and a sha256 per member. `install` refuses an archive whose
-checksums or schema it does not know.
-
-For fespsp-institucional that is services/fespsp-institucional/*,
-caddy/sites/fespsp-institucional.caddy, addons/mariadb/addon.yml, docker-compose.yml,
-caddy/Caddyfile and the FESPSP_INSTITUCIONAL_IMAGE pin.
-
-This is the first verb besides `env` that writes a file, and the README's opening
-sentence changes with it.
-
 ### §JCT33 export carries the env, encrypted
 
 `export` reads the value of every key the manifest declares (with its `env_prefix`, plus

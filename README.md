@@ -3,7 +3,8 @@
 jcloud checks a Japode Cloud service manifest (`japode.yml`) against the files that have
 to agree with it: the service's own Dockerfile, Caddyfile and workflows, and the compose
 file, route, `backup.conf` and `.env.example` the platform deploys beside it. It does not
-render or deploy anything, and only `env` writes a file.
+render or deploy anything. Two commands write a file: `env`, the encrypted configuration,
+and `export`, one service's platform files packed into an archive for another server.
 
 The product page, with a real run of every verb, is at https://japode.com/jcloud/ (built
 from [`site/`](site/README.md)).
@@ -32,6 +33,10 @@ jcloud observe [--root <dir>]                   run on the host: print what surv
 jcloud up [<service> …] [--root <dir>] …        what stands between a service and a deploy
 jcloud env <verb> …                             the age-encrypted .env.age: list, get,
                                                 set, unset, render
+jcloud export <service> [--root <dir>] -o <f>   run on the host: one service's
+                                                compose, route, manifest, addons,
+                                                edge files and image pin, in a
+                                                .tar.gz with a sha256 per member
 jcloud version
 ```
 

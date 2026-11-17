@@ -127,11 +127,17 @@ func main() {
 		os.Exit(up(args[1:]))
 	case "env":
 		// The only command here that is about configuration rather than about a
-		// manifest, and the only one that writes a file. Both are deliberate and
+		// manifest, and the first that wrote a file (export, JCT32, is the
+		// second). Both are deliberate and
 		// neither reverses JC34: what that refused is rendering the four
 		// hand-written files from a manifest, and .env was never one of them —
 		// it is rendered from a secret today, by the workflow.
 		os.Exit(envCmd(args[1:]))
+	case "export":
+		// The second command that writes a file (JCT32): one service's platform
+		// files in an archive, derived from jcloud.yml and the manifest. Reads only
+		// the tree it runs in, like observe, and carries no configuration value.
+		os.Exit(export(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
 		// other half of what determines this binary's behaviour, and a report about
@@ -187,7 +193,12 @@ func usage() {
   jcloud env <verb>                    the configuration in .env.age: list, get,
                                        set, unset, render — "jcloud env" alone
                                        prints the verbs and their flags
-  jcloud version                       this build, and the schema version
+  jcloud export <service>              run in the deployed tree: write one
+       [--root <dir>] -o <file>        service's compose, route, manifest,
+                                       addons, edge files and image pin to a
+                                       .tar.gz, with a sha256 per member.
+                                       No configuration values and no data
+  jcloud version                      this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a
 caller who fixes one field and runs again has been sent round a loop this could

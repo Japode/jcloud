@@ -15,9 +15,8 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT32** (deps: —) **Copying a service to another server means gathering its compose, route, manifest, addon and image pins by hand** — The manifest and jcloud.yml already name every file a service is made of, so the set an archive needs is derived, not listed. → §JCT32
-- 📋 **JCT33** (deps: JCT32) **A service's env values reach another server only by pasting its secrets by hand** — The manifest lists every key it reads and which are secret, and env already speaks age, so the archive can carry exactly those values encrypted. → §JCT33
-- 📋 **JCT34** (deps: JCT32) **A service's volumes and databases leave the server only as restic snapshots another host cannot open alone** — The manifest's volumes and each need's addon backup directive already say what the state is and how to dump it consistently. → §JCT34
+- 📋 **JCT33** (deps: JCT32 ✅) **A service's env values reach another server only by pasting its secrets by hand** — The manifest lists every key it reads and which are secret, and env already speaks age, so the archive can carry exactly those values encrypted. → §JCT33
+- 📋 **JCT34** (deps: JCT32 ✅) **A service's volumes and databases leave the server only as restic snapshots another host cannot open alone** — The manifest's volumes and each need's addon backup directive already say what the state is and how to dump it consistently. → §JCT34
 - 📋 **JCT35** (deps: JCT34) **State a manifest does not declare, such as fespsp's plugins in an anonymous volume, is lost by a move without a word** — A restored site missing its plugins comes up healthy and broken, so export must name every mount it is not carrying. → §JCT35
 - 📋 **JCT36** (deps: JCT33, JCT34) **Nothing installs an exported service on a new server; the restore order in DEPLOY.md is followed by hand** — The order is not optional: fespsp's image seeds fresh content on first boot unless the restored database is already there. → §JCT36
 - 📋 **JCT37** (deps: JCT36) **A new server has no GHCR login, so install cannot pull a private image such as fespsp-institucional's** — The platform pulls with GHCR_READ_TOKEN, a read:packages PAT a fresh host lacks, and a failed pull must stop the move before any data lands. → §JCT37
