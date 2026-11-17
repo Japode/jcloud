@@ -77,6 +77,9 @@ type ExportManifest struct {
 	// while the service ran (JCT34).
 	Data     []ExportData `json:"data,omitempty"`
 	DataLive bool         `json:"data_live,omitempty"`
+	// Mounts the manifest does not declare, left behind because --leave named
+	// them, as <container>:<path> (JCT35).
+	LeftMounts []string `json:"left_mounts,omitempty"`
 }
 
 // ExportMember is one file in the archive, at the path it has under the root.
@@ -454,12 +457,14 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 // export is the command. It writes beside the target and renames, so a refused or
 // interrupted export never leaves a half archive under the name asked for.
 func export(args []string) int {
-	usage := "jcloud export <service> [--root <dir>] --recipient <age public key> … [--identity <file>] [--stop] -o <file>.tar.gz"
+	usage := "jcloud export <service> [--root <dir>] --recipient <age public key> … [--identity <file>] [--stop] [--leave <path>] … -o <file>.tar.gz"
 	root, out, name, identity := ".", "", "", ""
 	stop := false
-	var recipients []string
+	var recipients, leave []string
 	for len(args) > 0 {
 		switch {
+		case args[0] == "--leave" && len(args) >= 2:
+			leave, args = append(leave, args[1]), args[2:]
 		case args[0] == "--stop":
 			stop, args = true, args[1:]
 		case args[0] == "--root" && len(args) >= 2:
@@ -500,6 +505,12 @@ func export(args []string) int {
 		return 2
 	}
 	defer os.RemoveAll(staging)
+	// Before anything is stopped or copied: an export that would leave state
+	// behind is refused at once, not after the service was taken down for it.
+	var leftMounts []string
+	if len(problems) == 0 {
+		leftMounts, problems = UndeclaredMounts(root, name, leave, exportDocker)
+	}
 	if len(problems) == 0 {
 		member, missing, from, err := ExportEnv(root, name, identity, recipients)
 		if err != nil {
@@ -529,7 +540,7 @@ func export(args []string) int {
 		Schema: ExportSchema, Jcloud: Version(), Service: name, SourceHost: host,
 		Created: time.Now().UTC().Format(time.RFC3339), Left: left,
 		Env: ExportEnvMember, EnvMissing: envMissing,
-		Data: data, DataLive: !stop && len(data) > 0,
+		Data: data, DataLive: !stop && len(data) > 0, LeftMounts: leftMounts,
 	}
 	tmp := out + ".partial"
 	w, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
@@ -581,6 +592,9 @@ func export(args []string) int {
 			detail += fmt.Sprintf(", %d table(s)", d.Tables)
 		}
 		fmt.Printf("      %s: %s %s, %s\n", d.Member, d.Kind, d.Source, detail)
+	}
+	for _, l := range leftMounts {
+		fmt.Printf("      \033[33m!\033[0m %s left behind, as --leave asked\n", l)
 	}
 	for _, n := range dataNotes {
 		fmt.Printf("      \033[33m!\033[0m %s\n", n)

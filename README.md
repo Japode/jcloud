@@ -41,7 +41,10 @@ jcloud export <service> [--root <dir>] -o <f>   run on the host: one service's
                                                 sealed to each recipient, each
                                                 volume as a tar and each database
                                                 as a dump; --stop stops the
-                                                service while volumes are copied
+      [--leave <path>] …                        service while volumes are copied;
+                                                a mount the manifest does not
+                                                declare refuses the export unless
+                                                --leave names it
 jcloud version
 ```
 

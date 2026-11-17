@@ -203,7 +203,9 @@ func usage() {
                                        sealed to each recipient; and its data:
                                        each volume as a tar, each database as
                                        a dump. --stop stops the service while
-                                       its volumes are copied
+       [--leave <path>] …              its volumes are copied. A mount the
+                                       manifest does not declare refuses it,
+                                       unless --leave names it
   jcloud version                      this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a

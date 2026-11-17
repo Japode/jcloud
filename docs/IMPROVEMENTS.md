@@ -93,27 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT35 export names the state it leaves behind
-
-fespsp-institucional's compose keeps DISALLOW_FILE_MODS off so wp-admin can install
-plugins, and its own comment says where they land: wp-content/plugins, in the
-container's anonymous volume, not backed up and not declared. A move built from the
-manifest alone would carry the uploads and the database and arrive with every plugin
-installed through wp-admin gone, while the healthcheck (the REST index) still passes.
-
-`export` therefore inspects each of the service's running containers (`docker inspect`
-mounts) and lists every volume or bind mount that the manifest does not declare. Each
-one is a refusal unless `--leave <path>` says it is known and meant to stay behind, or
-the manifest is changed to declare it. The remedy names both doors.
-
-The fix for this service belongs in the platform, not here: a named volume for
-wp-content/plugins in Japode/cloud's compose and manifest (cloud JC107). Once it is
-declared, JCT34 carries it like the uploads.
-
-The same check would have caught any service whose state moved to a path nobody
-declared, which is the drift `agree` cannot see because it reads files, not the running
-container.
-
 ### §JCT36 jcloud install: lay down, restore, start, prove
 
 `jcloud install <archive> --root <dir> --identity <age key>` runs on the target and

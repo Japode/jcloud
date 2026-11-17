@@ -62,8 +62,14 @@ func exportTree(t *testing.T, extra map[string]string) string {
 	return layTree(t, files)
 }
 
+// What each fixture container has mounted: exactly what is declared.
+var fakeMounts = map[string]string{
+	"japode-paste":    `[{"Type":"volume","Name":"japode-cloud_paste-data","Destination":"/data"},{"Type":"tmpfs","Destination":"/tmp"}]`,
+	"japode-paste-db": `[{"Type":"volume","Name":"japode-cloud_paste-db","Destination":"/var/lib/mysql"}]`,
+}
+
 // fakeExportDocker stands in for the docker export runs, recording each call. fail
-// names a verb (cp, exec, run, stop) that fails.
+// names a verb (cp, exec, run, stop, inspect) that fails.
 func fakeExportDocker(t *testing.T, fail map[string]string) *[]string {
 	t.Helper()
 	var calls []string
@@ -74,6 +80,8 @@ func fakeExportDocker(t *testing.T, fail map[string]string) *[]string {
 			return errors.New(reason)
 		}
 		switch args[0] {
+		case "inspect":
+			fmt.Fprint(w, fakeMounts[args[len(args)-1]])
 		case "cp":
 			fmt.Fprintf(w, "TAR of %s", args[1])
 		case "exec":
@@ -378,7 +386,7 @@ func TestExportCarriesTheState(t *testing.T) {
 	for _, c := range *calls {
 		order = append(order, strings.Join(strings.Fields(c)[:2], " "))
 	}
-	if got := strings.Join(order, ","); got != "docker exec,docker stop,docker cp,docker run,docker start" {
+	if got := strings.Join(order, ","); got != "docker inspect,docker inspect,docker exec,docker stop,docker cp,docker run,docker start" {
 		t.Fatalf("order: %s", got)
 	}
 }
@@ -425,6 +433,55 @@ func TestExportSaysASharedNeedIsNotCarried(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(notes, "\n"), "needs[db]: its database is mariadb") {
 		t.Fatalf("notes: %v", notes)
+	}
+}
+
+// JCT35: a mount the manifest does not declare (fespsp's plugins in an anonymous
+// volume) refuses the export before anything is stopped, naming both doors; a bind
+// mount from inside the tree is a file export carries and is not one.
+func TestExportRefusesUndeclaredState(t *testing.T) {
+	root := exportTree(t, nil)
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	was := fakeMounts["japode-paste"]
+	inside, _ := json.Marshal(filepath.ToSlash(filepath.Join(abs, "services", "paste", "init.sql")))
+	fakeMounts["japode-paste"] = `[{"Type":"volume","Name":"japode-cloud_paste-data","Destination":"/data"},` +
+		`{"Type":"volume","Name":"` + strings.Repeat("ab", 32) + `","Destination":"/var/www/html/wp-content/plugins"},` +
+		`{"Type":"bind","Source":` + string(inside) + `,"Destination":"/docker-entrypoint-initdb.d/init.sql"}]`
+	t.Cleanup(func() { fakeMounts["japode-paste"] = was })
+
+	left, problems := UndeclaredMounts(root, "paste", nil, exportDocker)
+	if len(left) != 0 || len(problems) != 1 {
+		t.Fatalf("left %v, problems %v", left, problems)
+	}
+	for _, w := range []string{"/var/www/html/wp-content/plugins is an anonymous volume", "declare it under volumes:", "--leave /var/www/html/wp-content/plugins"} {
+		if !strings.Contains(problems[0], w) {
+			t.Fatalf("no %q in %s", w, problems[0])
+		}
+	}
+
+	calls := fakeExportDocker(t, nil)
+	out := filepath.Join(t.TempDir(), "paste.tar.gz")
+	if code := export([]string{"paste", "--root", root, "--stop", "--recipient", testRecipient(t).Recipient().String(), "-o", out}); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	for _, c := range *calls {
+		if !strings.HasPrefix(c, "docker inspect") {
+			t.Fatalf("ran %q after the mounts refused the export", c)
+		}
+	}
+
+	// --leave says it is meant to stay behind, and the index records it.
+	idx, _ := exportAndReadWith(t, root, []string{"--leave", "/var/www/html/wp-content/plugins/"}, testRecipient(t).Recipient().String())
+	if !reflect.DeepEqual(idx.LeftMounts, []string{"japode-paste:/var/www/html/wp-content/plugins"}) {
+		t.Fatalf("left mounts: %v", idx.LeftMounts)
+	}
+
+	// A --leave that names nothing is a typo, and refused.
+	if _, problems := UndeclaredMounts(root, "paste", []string{"/nope"}, exportDocker); !strings.Contains(strings.Join(problems, "\n"), "--leave /nope") {
+		t.Fatalf("problems: %v", problems)
 	}
 }
 
