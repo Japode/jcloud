@@ -35,10 +35,13 @@ jcloud env <verb> …                             the age-encrypted .env.age: li
                                                 set, unset, render
 jcloud export <service> [--root <dir>] -o <f>   run on the host: one service's
       --recipient <age key> … [--identity <f>]  compose, route, manifest, addons,
-                                                edge files and image pin, in a
+      [--stop]                                  edge files and image pin, in a
                                                 .tar.gz with a sha256 per member,
-                                                and the values of the keys it
-                                                reads sealed to each recipient
+                                                the values of the keys it reads
+                                                sealed to each recipient, each
+                                                volume as a tar and each database
+                                                as a dump; --stop stops the
+                                                service while volumes are copied
 jcloud version
 ```
 

@@ -7,7 +7,8 @@
 // the pin file sit, and the manifest says which needs it has. So the set is derived
 // here, from the same resolution `agree` makes, and never listed.
 //
-// This is the platform's files and the format. The configuration travels sealed,
+// This is the platform's files and the format. The state travels as the members
+// export_data.go stages (JCT34). The configuration travels sealed,
 // as one member export_env.go writes (JCT33), and never as a file of the tree: a
 // file named like `.env` in the service's directory is left out and said to be,
 // because what it holds is secret and travels encrypted or not at all.
@@ -30,6 +31,7 @@ package main
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
@@ -71,6 +73,10 @@ type ExportManifest struct {
 	// that the source had no value and no default for (JCT33).
 	Env        string   `json:"env,omitempty"`
 	EnvMissing []string `json:"env_missing,omitempty"`
+	// The members carrying state, and whether the volumes among them were copied
+	// while the service ran (JCT34).
+	Data     []ExportData `json:"data,omitempty"`
+	DataLive bool         `json:"data_live,omitempty"`
 }
 
 // ExportMember is one file in the archive, at the path it has under the root.
@@ -82,10 +88,12 @@ type ExportMember struct {
 	Partial bool   `json:"partial,omitempty"`
 }
 
-// exportFile is a member with its bytes, before it is written.
+// exportFile is a member before it is written: its bytes, or for state too large
+// to hold, the staged file they are in.
 type exportFile struct {
 	ExportMember
 	data []byte
+	src  string
 }
 
 // ExportSet resolves the files one service is made of under root. It answers every
@@ -212,7 +220,7 @@ func ExportSet(root, name string) (files []exportFile, left, problems []string) 
 
 func newExportFile(rel string, data []byte, shared, partial bool) exportFile {
 	sum := sha256.Sum256(data)
-	return exportFile{ExportMember{Path: rel, Sha256: hex.EncodeToString(sum[:]), Size: len(data), Shared: shared, Partial: partial}, data}
+	return exportFile{ExportMember: ExportMember{Path: rel, Sha256: hex.EncodeToString(sum[:]), Size: len(data), Shared: shared, Partial: partial}, data: data}
 }
 
 // isEnvFile is configuration by its name: `.env`, `.env.age`, `.env.production`.
@@ -310,19 +318,32 @@ func WriteExport(w io.Writer, idx ExportManifest, files []exportFile) error {
 	}
 	zw := gzip.NewWriter(w)
 	tw := tar.NewWriter(zw)
-	put := func(name string, data []byte) error {
-		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(data)), ModTime: created, Typeflag: tar.TypeReg, Format: tar.FormatPAX}); err != nil {
+	put := func(name string, size int64, body io.Reader) error {
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: size, ModTime: created, Typeflag: tar.TypeReg, Format: tar.FormatPAX}); err != nil {
 			return err
 		}
-		_, err := tw.Write(data)
+		_, err := io.Copy(tw, body)
 		return err
 	}
-	if err := put(ExportIndex, append(index, '\n')); err != nil {
+	index = append(index, '\n')
+	if err := put(ExportIndex, int64(len(index)), bytes.NewReader(index)); err != nil {
 		return err
 	}
 	for _, f := range files {
-		if err := put(f.Path, f.data); err != nil {
+		if f.src == "" {
+			if err := put(f.Path, int64(len(f.data)), bytes.NewReader(f.data)); err != nil {
+				return err
+			}
+			continue
+		}
+		staged, err := os.Open(f.src)
+		if err != nil {
 			return err
+		}
+		err = put(f.Path, int64(f.Size), staged)
+		staged.Close()
+		if err != nil {
+			return fmt.Errorf("%s: %w", f.Path, err)
 		}
 	}
 	if err := tw.Close(); err != nil {
@@ -334,7 +355,9 @@ func WriteExport(w io.Writer, idx ExportManifest, files []exportFile) error {
 // ReadExport reads an archive back and refuses it unless it is one this build
 // knows: the schema it writes, an index first, every member it lists present with
 // its checksum, nothing it does not list, and no path that leaves the root it will
-// be installed under.
+// be installed under. It answers the platform's files; a member under data/ is
+// verified as it streams past and not held, so the reader extracts it in a second
+// pass once the whole archive is known to be good.
 func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 	zr, err := gzip.NewReader(r)
 	if err != nil {
@@ -343,6 +366,7 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 	tr := tar.NewReader(zr)
 	var idx *ExportManifest
 	got := map[string][]byte{}
+	sums := map[string]string{}
 	for {
 		h, err := tr.Next()
 		if errors.Is(err, io.EOF) {
@@ -350,6 +374,25 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 		}
 		if err != nil {
 			return nil, nil, err
+		}
+		if _, dup := sums[h.Name]; dup {
+			return nil, nil, fmt.Errorf("%s: is in the archive twice", h.Name)
+		}
+		// State is hashed as it streams past and not held: a volume can be
+		// gigabytes. Everything else is the platform's text, kept for the caller.
+		if strings.HasPrefix(h.Name, "data/") {
+			if idx == nil {
+				return nil, nil, fmt.Errorf("%s is not the first member, so this is not an archive jcloud export wrote", ExportIndex)
+			}
+			if h.Typeflag != tar.TypeReg {
+				return nil, nil, fmt.Errorf("%s: is not a regular file", h.Name)
+			}
+			sum := sha256.New()
+			if _, err := io.Copy(sum, tr); err != nil {
+				return nil, nil, err
+			}
+			sums[h.Name] = hex.EncodeToString(sum.Sum(nil))
+			continue
 		}
 		data, err := io.ReadAll(tr)
 		if err != nil {
@@ -371,9 +414,8 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 		if h.Typeflag != tar.TypeReg {
 			return nil, nil, fmt.Errorf("%s: is not a regular file", h.Name)
 		}
-		if _, dup := got[h.Name]; dup {
-			return nil, nil, fmt.Errorf("%s: is in the archive twice", h.Name)
-		}
+		sum := sha256.Sum256(data)
+		sums[h.Name] = hex.EncodeToString(sum[:])
 		got[h.Name] = data
 	}
 	if idx == nil {
@@ -388,16 +430,16 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 			problems = append(problems, fmt.Sprintf("%s: leaves the root it would be installed under", f.Path))
 			continue
 		}
-		data, ok := got[f.Path]
+		sum, ok := sums[f.Path]
 		if !ok {
 			problems = append(problems, fmt.Sprintf("%s: listed and not in the archive", f.Path))
 			continue
 		}
-		if sum := sha256.Sum256(data); hex.EncodeToString(sum[:]) != f.Sha256 {
+		if sum != f.Sha256 {
 			problems = append(problems, fmt.Sprintf("%s: its sha256 is not the one %s lists", f.Path, ExportIndex))
 		}
 	}
-	for name := range got {
+	for name := range sums {
 		if !listed[name] {
 			problems = append(problems, fmt.Sprintf("%s: in the archive and not listed in %s", name, ExportIndex))
 		}
@@ -412,11 +454,14 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 // export is the command. It writes beside the target and renames, so a refused or
 // interrupted export never leaves a half archive under the name asked for.
 func export(args []string) int {
-	usage := "jcloud export <service> [--root <dir>] --recipient <age public key> … [--identity <file>] -o <file>.tar.gz"
+	usage := "jcloud export <service> [--root <dir>] --recipient <age public key> … [--identity <file>] [--stop] -o <file>.tar.gz"
 	root, out, name, identity := ".", "", "", ""
+	stop := false
 	var recipients []string
 	for len(args) > 0 {
 		switch {
+		case args[0] == "--stop":
+			stop, args = true, args[1:]
 		case args[0] == "--root" && len(args) >= 2:
 			root, args = args[1], args[2:]
 		case args[0] == "-o" && len(args) >= 2:
@@ -444,18 +489,34 @@ func export(args []string) int {
 	}
 
 	files, left, problems := ExportSet(root, name)
-	var envMissing []string
+	var envMissing, dataNotes []string
+	var data []ExportData
 	envFrom := ""
+	// State is staged beside the output, on the same disk, and removed whatever
+	// happens: it is the service's data in clear.
+	staging, err := os.MkdirTemp(filepath.Dir(out), ".jcloud-export-")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "jcloud export: %v\n", err)
+		return 2
+	}
+	defer os.RemoveAll(staging)
 	if len(problems) == 0 {
 		member, missing, from, err := ExportEnv(root, name, identity, recipients)
 		if err != nil {
 			problems = append(problems, "configuration: "+err.Error())
 		} else {
 			files = append(files, member)
-			sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 			envMissing, envFrom = missing, from
 		}
 	}
+	if len(problems) == 0 {
+		var state []exportFile
+		var stateProblems []string
+		state, data, dataNotes, stateProblems = ExportState(root, name, staging, stop, exportDocker)
+		files = append(files, state...)
+		problems = append(problems, stateProblems...)
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	if len(problems) > 0 {
 		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s cannot be exported\n", name)
 		for _, p := range problems {
@@ -468,14 +529,24 @@ func export(args []string) int {
 		Schema: ExportSchema, Jcloud: Version(), Service: name, SourceHost: host,
 		Created: time.Now().UTC().Format(time.RFC3339), Left: left,
 		Env: ExportEnvMember, EnvMissing: envMissing,
+		Data: data, DataLive: !stop && len(data) > 0,
 	}
-	var buf bytes.Buffer
-	if err := WriteExport(&buf, idx, files); err != nil {
+	tmp := out + ".partial"
+	w, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "jcloud export: %v\n", err)
 		return 2
 	}
-	tmp := out + ".partial"
-	if err := os.WriteFile(tmp, buf.Bytes(), 0o600); err != nil {
+	bw := bufio.NewWriterSize(w, 1<<20)
+	err = WriteExport(bw, idx, files)
+	if err == nil {
+		err = bw.Flush()
+	}
+	if cerr := w.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		os.Remove(tmp)
 		fmt.Fprintf(os.Stderr, "jcloud export: %v\n", err)
 		return 2
 	}
@@ -503,6 +574,16 @@ func export(args []string) int {
 	fmt.Printf("      configuration from %s, sealed to %d recipient(s) in %s\n", envFrom, len(recipients), ExportEnvMember)
 	for _, l := range left {
 		fmt.Printf("      \033[33m!\033[0m %s left out: configuration travels sealed in %s, never as a file\n", l, ExportEnvMember)
+	}
+	for _, d := range data {
+		detail := fmt.Sprintf("%d byte(s)", d.Bytes)
+		if d.Kind == "mysql" {
+			detail += fmt.Sprintf(", %d table(s)", d.Tables)
+		}
+		fmt.Printf("      %s: %s %s, %s\n", d.Member, d.Kind, d.Source, detail)
+	}
+	for _, n := range dataNotes {
+		fmt.Printf("      \033[33m!\033[0m %s\n", n)
 	}
 	for _, k := range envMissing {
 		fmt.Printf("      \033[33m!\033[0m %s has no value in %s and no default; the service will not start on the target without it\n", k, envFrom)

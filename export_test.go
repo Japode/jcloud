@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -55,7 +58,33 @@ func exportTree(t *testing.T, extra map[string]string) string {
 	for k, v := range extra {
 		files[k] = v
 	}
+	fakeExportDocker(t, nil)
 	return layTree(t, files)
+}
+
+// fakeExportDocker stands in for the docker export runs, recording each call. fail
+// names a verb (cp, exec, run, stop) that fails.
+func fakeExportDocker(t *testing.T, fail map[string]string) *[]string {
+	t.Helper()
+	var calls []string
+	was := exportDocker
+	exportDocker = func(w io.Writer, name string, args ...string) error {
+		calls = append(calls, name+" "+strings.Join(args, " "))
+		if reason, ok := fail[args[0]]; ok {
+			return errors.New(reason)
+		}
+		switch args[0] {
+		case "cp":
+			fmt.Fprintf(w, "TAR of %s", args[1])
+		case "exec":
+			fmt.Fprint(w, "-- MariaDB dump\nCREATE TABLE `a` (\n);\nCREATE TABLE `b` (\n);\n-- Dump completed on 2026-11-17\n")
+		case "run":
+			fmt.Fprint(w, "SQLite format 3")
+		}
+		return nil
+	}
+	t.Cleanup(func() { exportDocker = was })
+	return &calls
 }
 
 func exportPaths(files []exportFile) []string {
@@ -195,8 +224,13 @@ func testRecipient(t *testing.T) *age.X25519Identity {
 
 func exportAndRead(t *testing.T, root string, extra ...string) (*ExportManifest, map[string][]byte) {
 	t.Helper()
+	return exportAndReadWith(t, root, nil, extra...)
+}
+
+func exportAndReadWith(t *testing.T, root string, flags []string, extra ...string) (*ExportManifest, map[string][]byte) {
+	t.Helper()
 	out := filepath.Join(t.TempDir(), "paste.tar.gz")
-	args := []string{"paste", "--root", root, "-o", out}
+	args := append([]string{"paste", "--root", root, "-o", out}, flags...)
 	for _, r := range extra {
 		args = append(args, "--recipient", r)
 	}
@@ -289,6 +323,108 @@ func TestExportEnvFromTheSealedStore(t *testing.T) {
 	idx, _ := exportAndRead(t, root, target.Recipient().String())
 	if !reflect.DeepEqual(idx.EnvMissing, []string{"PASTE_DB_PASSWORD"}) {
 		t.Fatalf("missing: %v", idx.EnvMissing)
+	}
+}
+
+// JCT34: each volume is the tar docker cp streams from the service's container,
+// each sqlite file a VACUUM INTO copy from the project's volume, each mysql need a
+// dump that ran to the end, with its table count; live unless --stop, which stops
+// and starts the service around the volume copy and never the database.
+func TestExportCarriesTheState(t *testing.T) {
+	manifest := strings.Replace(needyManifest, "    path: /data\n", "    path: /data\n    sqlite: [app.db]\n", 1)
+	root := exportTree(t, map[string]string{"services/paste/japode.yml": manifest})
+	calls := fakeExportDocker(t, nil)
+	id := testRecipient(t)
+
+	idx, got := exportAndRead(t, root, id.Recipient().String())
+	if !idx.DataLive {
+		t.Fatal("volumes copied without --stop are not said to be live")
+	}
+	if _, held := got["data/paste-data.tar"]; held {
+		t.Fatal("ReadExport held a data member in memory")
+	}
+	sums := map[string]string{}
+	for _, f := range idx.Files {
+		sums[f.Path] = f.Sha256
+	}
+	if sums["data/paste-data.tar"] != newExportFile("x", []byte("TAR of japode-paste:/data"), false, false).Sha256 {
+		t.Fatal("the volume member is not the tar docker cp streamed")
+	}
+	dump := "-- MariaDB dump\nCREATE TABLE `a` (\n);\nCREATE TABLE `b` (\n);\n-- Dump completed on 2026-11-17\n"
+	want := []ExportData{
+		{Member: "data/paste-db.sql", Kind: "mysql", Source: "paste-db", Bytes: int64(len(dump)), Tables: 2},
+		{Member: "data/paste-data.tar", Kind: "volume", Source: "paste-data", Mount: "/data", Bytes: int64(len("TAR of japode-paste:/data"))},
+		{Member: "data/paste-data/app.db", Kind: "sqlite", Source: "paste-data", File: "app.db", Bytes: int64(len("SQLite format 3"))},
+	}
+	if !reflect.DeepEqual(idx.Data, want) {
+		t.Fatalf("data:\n got %+v\nwant %+v", idx.Data, want)
+	}
+	joined := strings.Join(*calls, "\n")
+	for _, w := range []string{"docker exec -i japode-paste-db sh -c", "japode-cloud_paste-data:/v"} {
+		if !strings.Contains(joined, w) {
+			t.Fatalf("no %q in calls:\n%s", w, joined)
+		}
+	}
+	if strings.Contains(joined, "docker stop") {
+		t.Fatal("stopped the service without --stop")
+	}
+
+	*calls = nil
+	idx, _ = exportAndReadWith(t, root, []string{"--stop"}, id.Recipient().String())
+	if idx.DataLive {
+		t.Fatal("--stop still says live")
+	}
+	var order []string
+	for _, c := range *calls {
+		order = append(order, strings.Join(strings.Fields(c)[:2], " "))
+	}
+	if got := strings.Join(order, ","); got != "docker exec,docker stop,docker cp,docker run,docker start" {
+		t.Fatalf("order: %s", got)
+	}
+}
+
+// JCT34: a dump that did not run to the end, or a database that is not up, refuses
+// the export, and the stopped service is started again whatever happened.
+func TestExportRefusesACutDump(t *testing.T) {
+	root := exportTree(t, nil)
+	calls := fakeExportDocker(t, map[string]string{"cp": "no such container"})
+	out := filepath.Join(t.TempDir(), "paste.tar.gz")
+	if code := export([]string{"paste", "--root", root, "--stop", "--recipient", testRecipient(t).Recipient().String(), "-o", out}); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if last := (*calls)[len(*calls)-1]; !strings.HasPrefix(last, "docker start japode-paste") {
+		t.Fatalf("the service was not started again: %v", *calls)
+	}
+	entries, _ := os.ReadDir(filepath.Dir(out))
+	if len(entries) != 0 {
+		t.Fatalf("a refused export left %v behind", entries)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "cut.sql"), []byte("CREATE TABLE `a` (\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if tables, complete, err := scanDump(filepath.Join(dir, "cut.sql")); err != nil || complete || tables != 1 {
+		t.Fatalf("cut dump: tables=%d complete=%t err=%v", tables, complete, err)
+	}
+}
+
+// JCT34: a shared need's database is the platform's, and saying so is all export
+// does with it.
+func TestExportSaysASharedNeedIsNotCarried(t *testing.T) {
+	manifest := strings.Replace(needyManifest, "    type: mariadb\n", "    type: mariadb\n    shared: mariadb\n", 1)
+	root := exportTree(t, map[string]string{"services/paste/japode.yml": manifest})
+	_, data, notes, problems := ExportState(root, "paste", t.TempDir(), false, exportDocker)
+	if len(problems) > 0 {
+		t.Fatalf("problems: %v", problems)
+	}
+	for _, d := range data {
+		if d.Kind == "mysql" {
+			t.Fatalf("dumped the platform's database: %+v", d)
+		}
+	}
+	if !strings.Contains(strings.Join(notes, "\n"), "needs[db]: its database is mariadb") {
+		t.Fatalf("notes: %v", notes)
 	}
 }
 

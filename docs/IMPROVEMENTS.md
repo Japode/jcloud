@@ -93,27 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT34 export carries the data
-
-Each volume the manifest declares becomes `data/<volume>.tar` in the archive, read
-through a throwaway container mounting the volume read-only (the restic drill's way in,
-without restic). Each `needs:` whose addon declares a dump becomes `data/<need>.sql`,
-made the way the addon's backup directive says: for mariadb, `mariadb-dump
---single-transaction` as MARIADB_USER over the one database, which is consistent while
-the site keeps serving. SQLite files named in backup.conf are copied with `.backup`,
-never as bytes mid-write.
-
-Volumes are not consistent the same way: a file uploaded during the copy may be missing.
-`--stop` stops the service (not its database) for the duration and starts it again,
-which is what the final export before a cutover wants; without it the export says the
-volumes were copied live.
-
-The archive records each volume's size and each dump's table count, so `install` can say
-the restore came back whole rather than merely ran.
-
-For fespsp-institucional: `fespsp-institucional-uploads` as a tar and `db` as
-`fespsp.sql`. WordPress core and the themes are not data: they come from the image.
-
 ### §JCT35 export names the state it leaves behind
 
 fespsp-institucional's compose keeps DISALLOW_FILE_MODS off so wp-admin can install

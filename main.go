@@ -197,10 +197,13 @@ func usage() {
   jcloud export <service>              run in the deployed tree: write one
        [--root <dir>] -o <file>        service's compose, route, manifest,
        --recipient <age key> …         addons, edge files and image pin to a
-       [--identity <file>]             .tar.gz, with a sha256 per member, and
-                                       the values of the keys it reads, from
-                                       .env (or .env.age, opened with the
-                                       identity) sealed to each recipient
+       [--identity <file>]             .tar.gz, with a sha256 per member; the
+       [--stop]                        values of the keys it reads, from .env
+                                       (or .env.age, opened with the identity)
+                                       sealed to each recipient; and its data:
+                                       each volume as a tar, each database as
+                                       a dump. --stop stops the service while
+                                       its volumes are copied
   jcloud version                      this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a
