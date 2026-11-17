@@ -90,7 +90,15 @@ host:                                  # absent: nothing about the host is asser
     - path: .                          # relative to the root, or absolute
       mode: "750"
       owner: runner:runner             # optional
-  firewall: ufw                        # must be installed and active
+  firewall:                            # or just `firewall: ufw`
+    kind: ufw                          # must be installed and active
+    allow: [OpenSSH, 80/tcp, 443/tcp]  # and, while active, allow each rule
+  user: {name: runner, groups: [docker]}  # the deploy account, in each group
+  sysctl:                              # each kernel setting must read this value
+    net.ipv6.conf.all.disable_ipv6:
+      value: "1"
+      why: no name here has an AAAA record  # travels into the report
+  requires: [docker, compose, rsync]   # each on PATH (compose: the plugin)
   disks: [/, /var/lib/docker]          # each filesystem must keep
   disk_free: 15%                       #   this much free
   certs: [caddy/certificates/*/*.crt]  # each certificate file (a glob) must stay
@@ -110,9 +118,11 @@ local `docker` which containers are up (stripping `container_prefix`), how each 
 and which digest it runs, reads each service's pin from `pin_file`, and reports each
 profile a manifest declares as `on` when `COMPOSE_PROFILES` names it or one of its
 services is up. When `jcloud.yml` declares `host:`, it also reads those timers
-(`systemctl is-active` and each unit's last run), paths (`stat`), the firewall (`ufw
-status`), free space (`df`) and certificate expiry (read from the file, never by
-connecting), and `survey` reports each one that differs or could not be read. It reaches
+(`systemctl is-active` and each unit's last run), paths (`stat`), the firewall and its
+rules (`ufw status`), the user (`id -nG`), kernel settings (`sysctl -n`), the required
+tools (`command -v`, and `docker compose version`), free space (`df`) and certificate
+expiry (read from the file, never by connecting), and `survey` reports each one that
+differs or could not be read. It reaches
 no network. Getting its output to `survey` is the platform's
 job, for example `ssh host 'cd /srv/platform && jcloud observe' > observed.txt`.
 

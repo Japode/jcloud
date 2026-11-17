@@ -117,27 +117,3 @@ server needs `jcloud install <archive>` and nothing else.
 Outside: the GitHub runner registration, the platform's way of deploying and not part of
 a move. A writing verb changes what jcloud is; this one is invoked by a person and never
 by the watch, so the non-goal on unattended repair still holds.
-
-### §JCT40 host: declares what a server is built with
-
-Japode/cloud's scripts/bootstrap-server.sh sets up four things `host:` cannot say today:
-a non-root deploy user in the docker group, the deploy directory and its pin file (750
-and 600, owned by that user), the firewall's open ports (80/tcp, 443/tcp, 443/udp) and a
-sysctl file turning IPv6 off on a provider whose v6 path resets large pulls (cloud
-JC102). `host.paths` covers the second already; the rest is new:
-
-```yaml
-host:
-  user: {name: runner, groups: [docker]}
-  firewall: {kind: ufw, allow: [OpenSSH, 80/tcp, 443/tcp, 443/udp]}
-  sysctl: {net.ipv6.conf.all.disable_ipv6: "1", net.ipv6.conf.default.disable_ipv6: "1"}
-  requires: [docker, compose, rsync, git]
-```
-
-`observe` reads each one (`id`, `ufw status`, `sysctl -n`, `command -v`) and `survey`
-reports each difference with a stable code, like the timers and modes before them
-(JCT23). This task only declares and checks. Changing the machine is JCT38.
-
-The sysctl entry keeps the reason the script states: it is right only while no name on
-the host has an AAAA record. A `why:` beside an entry carries that sentence into the
-file jcloud writes.

@@ -66,6 +66,14 @@ type Observed struct {
 	// certificate file.
 	Disks map[string]string
 	Certs map[string]string
+
+	// What the server is built with (JCT40): each declared user's groups (or
+	// absent/unknown), each "<firewall> <rule>" allowed, each sysctl's value, and
+	// each required tool's presence.
+	Users   map[string]string
+	Allowed map[string]bool
+	Sysctls map[string]string
+	Tools   map[string]string
 }
 
 func ParseObserved(body string) *Observed {
@@ -82,6 +90,10 @@ func ParseObserved(body string) *Observed {
 		Clock:      map[string]int64{},
 		Disks:      map[string]string{},
 		Certs:      map[string]string{},
+		Users:      map[string]string{},
+		Allowed:    map[string]bool{},
+		Sysctls:    map[string]string{},
+		Tools:      map[string]string{},
 	}
 	for _, line := range strings.Split(body, "\n") {
 		f := strings.Fields(line)
@@ -115,6 +127,14 @@ func ParseObserved(body string) *Observed {
 			o.Disks[f[1]] = f[2]
 		case "cert":
 			o.Certs[f[1]] = f[2]
+		case "user":
+			o.Users[f[1]] = f[2]
+		case "allow":
+			o.Allowed[f[1]+" "+f[2]] = true
+		case "sysctl":
+			o.Sysctls[f[1]] = f[2]
+		case "tool":
+			o.Tools[f[1]] = f[2]
 		case "clock":
 			var secs int64
 			if _, err := fmt.Sscan(f[2], &secs); err == nil {

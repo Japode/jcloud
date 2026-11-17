@@ -15,8 +15,7 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT38** (deps: JCT40) **Nothing in jcloud prepares an empty server: docker, the deploy user, modes and firewall are set by a platform script** — The owner wants jcloud to take that job over, so a move needs only jcloud and the archive, and platforms drop their bootstrap scripts. → §JCT38
-- 📋 **JCT40** (deps: —) **jcloud.yml's host: cannot state a deploy user, open ports or kernel settings, so they live only in bootstrap-server.sh** — One declaration has to be what survey checks and what the host is built from, or the bash and the watch drift apart. → §JCT40
+- 📋 **JCT38** (deps: JCT40 ✅) **Nothing in jcloud prepares an empty server: docker, the deploy user, modes and firewall are set by a platform script** — The owner wants jcloud to take that job over, so a move needs only jcloud and the archive, and platforms drop their bootstrap scripts. → §JCT38
 
 ## Done when — Block B
 

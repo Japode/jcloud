@@ -52,6 +52,13 @@ type Host struct {
 	DiskFree string
 	Certs    []string
 	CertDays int
+
+	// What the server is built with (JCT40, host_setup.go): the deploy user, the
+	// firewall's allow rules, kernel settings and the tools the deploy runs.
+	User          *HostUser
+	FirewallAllow []string
+	Sysctl        []HostSysctl
+	Requires      []string
 }
 
 // HostTimer is one timer that must be active (JCT23), and whose unit's last run
@@ -101,18 +108,22 @@ type HostPath struct {
 }
 
 type hostFile struct {
-	Timers   []HostTimer `yaml:"timers"`
-	Paths    []HostPath  `yaml:"paths"`
-	Firewall string      `yaml:"firewall"`
-	Disks    []string    `yaml:"disks"`
-	DiskFree string      `yaml:"disk_free"`
-	Certs    []string    `yaml:"certs"`
-	CertDays int         `yaml:"cert_days"`
+	Timers   []HostTimer            `yaml:"timers"`
+	Paths    []HostPath             `yaml:"paths"`
+	Firewall hostFirewall           `yaml:"firewall"`
+	Disks    []string               `yaml:"disks"`
+	DiskFree string                 `yaml:"disk_free"`
+	Certs    []string               `yaml:"certs"`
+	CertDays int                    `yaml:"cert_days"`
+	User     *HostUser              `yaml:"user"`
+	Sysctl   map[string]sysctlValue `yaml:"sysctl"`
+	Requires []string               `yaml:"requires"`
 }
 
 func (f hostFile) host() Host {
-	return Host{Timers: f.Timers, Paths: f.Paths, Firewall: f.Firewall,
-		Disks: f.Disks, DiskFree: f.DiskFree, Certs: f.Certs, CertDays: f.CertDays}
+	return Host{Timers: f.Timers, Paths: f.Paths, Firewall: f.Firewall.Kind,
+		Disks: f.Disks, DiskFree: f.DiskFree, Certs: f.Certs, CertDays: f.CertDays,
+		User: f.User, FirewallAllow: f.Firewall.Allow, Sysctl: sysctlList(f.Sysctl), Requires: f.Requires}
 }
 
 // firewalls is every firewall this build can read.
@@ -158,6 +169,7 @@ func (h Host) validate() []string {
 		bad("host.firewall is %q, and this build reads %s", h.Firewall, strings.Join(firewalls, ", "))
 	}
 	h.validateCapacity(bad)
+	h.validateSetup(bad)
 	return out
 }
 
@@ -171,6 +183,7 @@ func (h Host) validate() []string {
 //	cert     <file>      <unix NotAfter>         (JCT25, host_capacity.go)
 //	path     <path>      <mode> <user:group>     unknown unknown when stat failed
 //	firewall ufw         <status>                absent, or unreadable without root
+//	user, allow, sysctl, tool                    (JCT40, host_setup.go)
 func observeHost(root string, h Host, run commandRunner) []string {
 	var lines []string
 	if len(h.Timers) > 0 {
@@ -196,8 +209,10 @@ func observeHost(root string, h Host, run commandRunner) []string {
 		}
 		lines = append(lines, fmt.Sprintf("path %s %s %s", p.Path, mode, owner))
 	}
+	ufwStatus := ""
 	if h.Firewall == "ufw" {
 		out, err := run("ufw", "status")
+		ufwStatus = out
 		state := "unreadable"
 		switch {
 		case errors.Is(err, exec.ErrNotFound):
@@ -211,7 +226,7 @@ func observeHost(root string, h Host, run commandRunner) []string {
 		}
 		lines = append(lines, "firewall ufw "+state)
 	}
-	return lines
+	return append(lines, observeSetup(h, ufwStatus, run)...)
 }
 
 // now is the host's clock, swapped by the tests.
@@ -363,5 +378,5 @@ func surveyHost(h Host, o *Observed) []Divergence {
 			out = append(out, Divergence{h.Firewall, fmt.Sprintf("is %s, so nothing on this host filters anything", state), "firewall.off"})
 		}
 	}
-	return out
+	return append(out, surveySetup(h, o)...)
 }
