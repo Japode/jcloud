@@ -215,8 +215,11 @@ func usage() {
        [--root <dir>]                  is not empty for the service, lay its
        [--identity <file>]             files down, merge its keys and pins,
        [--wait-timeout <seconds>]      restore its volumes and dumps before it
-                                       starts, start it and the edge, and say
-                                       what DNS still has to point here
+       [--registry-token-file <path>   starts, start it and the edge, and say
+        --registry-user <name>]        what DNS still has to point here. Every
+                                       pinned image is pulled first, after a
+                                       login with the token when one is given
+                                       (or JCLOUD_REGISTRY_TOKEN and _USER)
   jcloud version                     this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a

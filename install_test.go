@@ -3,6 +3,7 @@ package main
 import (
 	"archive/tar"
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -22,6 +23,9 @@ type fakeInstall struct {
 	copied   map[string][]string // destination -> entry names
 	bodies   map[string]string   // entry name -> content
 	fed      string
+	token    string // what `docker login` read on stdin
+	// pullFails makes every pull answer as a private registry does without a login.
+	pullFails bool
 }
 
 func (f *fakeInstall) run(stdin io.Reader, stdout io.Writer, name string, args ...string) error {
@@ -43,6 +47,13 @@ func (f *fakeInstall) run(stdin io.Reader, stdout io.Writer, name string, args .
 			body, _ := io.ReadAll(tr)
 			f.copied[args[len(args)-1]] = append(f.copied[args[len(args)-1]], h.Name)
 			f.bodies[h.Name] = string(body)
+		}
+	case args[0] == "login":
+		b, _ := io.ReadAll(stdin)
+		f.token = string(b)
+	case args[0] == "pull":
+		if f.pullFails {
+			return errors.New("denied: requires authentication")
 		}
 	case args[0] == "exec" && args[1] == "-i":
 		b, _ := io.ReadAll(stdin)
@@ -117,7 +128,7 @@ func TestInstallRestoresBeforeItStarts(t *testing.T) {
 	t.Setenv("JCLOUD_IDENTITY", id.String())
 	d := newFakeInstall()
 
-	if code := runInstall(archive, target, "", 60, d.run); code != 0 {
+	if code := runInstall(archive, target, "", 60, registryLogin{}, d.run); code != 0 {
 		t.Fatalf("exit %d; calls:\n%s", code, strings.Join(d.calls, "\n"))
 	}
 
@@ -176,7 +187,7 @@ func TestInstallRefusesBeforeWriting(t *testing.T) {
 	d := newFakeInstall()
 	d.occupied["japode-paste-db"] = true
 	d.occupied["japode-cloud_paste-data"] = true
-	if code := runInstall(archive, target, "", 60, d.run); code != 1 {
+	if code := runInstall(archive, target, "", 60, registryLogin{}, d.run); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	_, problems := planInstall(archive, target, "", d.run)
@@ -202,6 +213,79 @@ func TestInstallRefusesBeforeWriting(t *testing.T) {
 	}
 }
 
+// JCT37: with a token, install logs in to each registry the pins name, on stdin,
+// and pulls every pinned digest (the service's and the addon's) before anything is
+// written; the token is in no file it lays down.
+func TestInstallLogsInAndPullsFirst(t *testing.T) {
+	archive, id := installArchive(t)
+	t.Setenv("JCLOUD_IDENTITY", id.String())
+	target := layTree(t, map[string]string{".env": "ACME_EMAIL=ops@example.org\n"})
+	d := newFakeInstall()
+	if code := runInstall(archive, target, "", 60, registryLogin{user: "owner", token: "ghp_secret"}, d.run); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if d.token != "ghp_secret" {
+		t.Fatalf("login read %q on stdin", d.token)
+	}
+	var head []string
+	for _, c := range d.calls {
+		if f := strings.Fields(c); f[1] == "login" || f[1] == "pull" || f[1] == "compose" {
+			head = append(head, strings.Join(f[1:3], " "))
+		}
+	}
+	want := "login ghcr.io,pull --quiet,pull --quiet,compose --project-directory"
+	if got := strings.Join(head[:4], ","); got != want {
+		t.Fatalf("order: %s", got)
+	}
+	joined := strings.Join(d.calls, "\n")
+	for _, ref := range []string{"pull --quiet ghcr.io/x/paste@sha256:aaaa", "pull --quiet mariadb:11.4@sha256:"} {
+		if !strings.Contains(joined, ref) {
+			t.Fatalf("no %q in:\n%s", ref, joined)
+		}
+	}
+	if strings.Contains(joined, "ghp_secret") {
+		t.Fatal("the token reached a command line")
+	}
+	filepath.WalkDir(target, func(p string, e os.DirEntry, err error) error {
+		if err == nil && !e.IsDir() && strings.Contains(string(mustRead(t, p)), "ghp_secret") {
+			t.Fatalf("%s carries the token", p)
+		}
+		return nil
+	})
+}
+
+// JCT37: a pull that fails refuses the install on an untouched place, and says
+// what a private image needs.
+func TestInstallRefusesAFailedPullBeforeWriting(t *testing.T) {
+	archive, id := installArchive(t)
+	t.Setenv("JCLOUD_IDENTITY", id.String())
+	target := t.TempDir()
+	if err := os.WriteFile(filepath.Join(target, ".env"), []byte("ACME_EMAIL=ops@example.org\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	d := newFakeInstall()
+	d.pullFails = true
+	if code := runInstall(archive, target, "", 60, registryLogin{}, d.run); code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if entries, _ := os.ReadDir(target); len(entries) != 1 {
+		t.Fatalf("a failed pull wrote %v", entries)
+	}
+	for _, c := range d.calls {
+		if strings.Contains(c, " compose ") || strings.Contains(c, " cp ") {
+			t.Fatalf("ran %q after a failed pull", c)
+		}
+	}
+	p, _ := planInstall(archive, target, "", d.run)
+	_, problems := p.pull(registryLogin{}, d.run)
+	if !strings.Contains(strings.Join(problems, "\n"), "--registry-token-file") {
+		t.Fatalf("problems name no remedy: %v", problems)
+	}
+	if registryOf("mariadb:11.4") != "docker.io" || registryOf("ghcr.io/x/y@sha256:a") != "ghcr.io" || registryOf("localhost:5000/x") != "localhost:5000" {
+		t.Fatal("registryOf")
+	}
+}
+
 // JCT36: a database that comes back with fewer tables than the dump carried is a
 // failed install, and the service is never started on it.
 func TestInstallRefusesAShortRestore(t *testing.T) {
@@ -210,7 +294,7 @@ func TestInstallRefusesAShortRestore(t *testing.T) {
 	target := layTree(t, map[string]string{".env": "ACME_EMAIL=ops@example.org\n"})
 	d := newFakeInstall()
 	d.tables = "1\n"
-	if code := runInstall(archive, target, "", 60, d.run); code != 1 {
+	if code := runInstall(archive, target, "", 60, registryLogin{}, d.run); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	if last := d.calls[len(d.calls)-1]; strings.Contains(last, " up ") && strings.HasSuffix(last, "caddy") {

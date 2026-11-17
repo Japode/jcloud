@@ -28,8 +28,16 @@
 // Compose is run the way scripts/deploy.sh runs it: `.env` and then the pin file
 // as two --env-file, the edge's compose file and the service's, from the root.
 //
-// Not done here: preparing the host (JCT38) and logging in to a private registry
-// (JCT37). A pull that fails stops the install at step 3, before any data lands.
+// Before any of it is written, every image is pulled: this service's pins and each
+// addon's digest, after a `docker login` to each registry they name when a token is
+// given (JCT37). A private package such as fespsp-institucional's needs one, a PAT
+// with read:packages as the platform's Deploy workflow uses. The token comes from a
+// file or JCLOUD_REGISTRY_TOKEN, never argv, and is written nowhere in the tree;
+// the login lands in the invoking user's docker config, as a manual one would, and
+// install says so. Shipping images inside the archive (`docker save`) is not done:
+// nothing in this move needs a host with no registry access at all.
+//
+// Not done here: preparing the host (JCT38).
 package main
 
 import (
@@ -91,6 +99,7 @@ type installPlan struct {
 	env     map[string]string // the merged configuration
 	notes   []string
 	hasPins bool
+	pinned  []string // the image references this service's pin lines name
 }
 
 // planInstall reads the archive and the target and decides what to write, or
@@ -222,6 +231,10 @@ func (p *installPlan) planFiles(root string, files map[string][]byte, bad func(s
 			for k, v := range parseDotEnv(merged) {
 				pins[k] = v
 			}
+			for _, v := range parseDotEnv(string(data)) {
+				p.pinned = append(p.pinned, v)
+			}
+			sort.Strings(p.pinned)
 			p.hasPins = true
 		case exists && bytes.Equal(existing, data):
 		case exists && member.Shared:
@@ -553,6 +566,74 @@ func sqliteSidecar(name string, subst map[string]string) bool {
 	return false
 }
 
+// images is every reference the install pulls: this service's pins and each owned
+// need's addon image, which carries its own digest.
+func (p *installPlan) images() []string {
+	out := append([]string{}, p.pinned...)
+	for _, r := range p.needs {
+		if !contains(out, r.addon.Image) {
+			out = append(out, r.addon.Image)
+		}
+	}
+	return out
+}
+
+// registryOf is the host an image reference is pulled from, by docker's own rule:
+// the first component is a host when it has a dot or a colon or is localhost.
+func registryOf(ref string) string {
+	first, _, found := strings.Cut(ref, "/")
+	if found && (strings.ContainsAny(first, ".:") || first == "localhost") {
+		return first
+	}
+	return "docker.io"
+}
+
+// registryLogin is who install logs in as (JCT37): a token, never written to the
+// tree or the archive, and the name it belongs to.
+type registryLogin struct{ user, token string }
+
+// pull logs in to each registry the images name, when a token was given, and pulls
+// every image, before anything is written: a token that is wrong or expired fails
+// the move on an untouched place, not halfway through a restore (JCT37).
+func (p *installPlan) pull(login registryLogin, run dockerRunner) (report, problems []string) {
+	images := p.images()
+	if login.token != "" {
+		var registries []string
+		for _, ref := range images {
+			if r := registryOf(ref); r != "docker.io" && !contains(registries, r) {
+				registries = append(registries, r)
+			}
+		}
+		sort.Strings(registries)
+		for _, r := range registries {
+			if err := run(strings.NewReader(login.token), io.Discard, "docker", "login", r, "-u", login.user, "--password-stdin"); err != nil {
+				return report, []string{fmt.Sprintf("logging in to %s as %s: %v", r, login.user, redact(err, login.token))}
+			}
+			report = append(report, fmt.Sprintf("logged in to %s as %s; the login is in this user's docker config, and `docker logout %s` removes it", r, login.user, r))
+		}
+	}
+	for _, ref := range images {
+		if err := run(nil, io.Discard, "docker", "pull", "--quiet", ref); err != nil {
+			hint := ""
+			if login.token == "" && registryOf(ref) != "docker.io" {
+				hint = " — a private image needs --registry-token-file (or JCLOUD_REGISTRY_TOKEN) and --registry-user"
+			}
+			problems = append(problems, fmt.Sprintf("pulling %s: %v%s", ref, redact(err, login.token), hint))
+			continue
+		}
+		report = append(report, "pulled "+ref)
+	}
+	return report, problems
+}
+
+// redact keeps a token out of an error that may have echoed its input.
+func redact(err error, token string) string {
+	if token == "" {
+		return err.Error()
+	}
+	return strings.ReplaceAll(err.Error(), token, "***")
+}
+
 // installHosts is what DNS has to point here: each route's hosts as the target's
 // configuration sets them, or as the manifest declares them.
 func (p *installPlan) installHosts() []string {
@@ -571,11 +652,16 @@ func (p *installPlan) installHosts() []string {
 
 // install is the command.
 func install(args []string) int {
-	usage := "jcloud install <archive> [--root <dir>] [--identity <file>] [--wait-timeout <seconds>]"
-	root, identity, archive := ".", "", ""
+	usage := "jcloud install <archive> [--root <dir>] [--identity <file>] [--wait-timeout <seconds>] [--registry-token-file <path> --registry-user <name>]"
+	root, identity, archive, tokenFile := ".", "", "", ""
+	login := registryLogin{user: os.Getenv("JCLOUD_REGISTRY_USER"), token: os.Getenv("JCLOUD_REGISTRY_TOKEN")}
 	wait := 600
 	for len(args) > 0 {
 		switch {
+		case args[0] == "--registry-token-file" && len(args) >= 2:
+			tokenFile, args = args[1], args[2:]
+		case args[0] == "--registry-user" && len(args) >= 2:
+			login.user, args = args[1], args[2:]
 		case args[0] == "--root" && len(args) >= 2:
 			root, args = args[1], args[2:]
 		case args[0] == "--identity" && len(args) >= 2:
@@ -598,15 +684,29 @@ func install(args []string) int {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
+	if tokenFile != "" {
+		data, err := os.ReadFile(tokenFile)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "jcloud install: %v\n", err)
+			return 2
+		}
+		login.token = strings.TrimSpace(string(data))
+	}
+	// The name is the token's owner's, as the platform's workflow passes it; a
+	// token without one is a login that cannot be spelled.
+	if login.token != "" && login.user == "" {
+		fmt.Fprintf(os.Stderr, "jcloud install: a registry token needs --registry-user (or JCLOUD_REGISTRY_USER), the account it belongs to\n%s\n", usage)
+		return 2
+	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "jcloud install: %v\n", err)
 		return 2
 	}
-	return runInstall(archive, abs, identity, wait, installDocker)
+	return runInstall(archive, abs, identity, wait, login, installDocker)
 }
 
-func runInstall(archive, root, identity string, wait int, run dockerRunner) int {
+func runInstall(archive, root, identity string, wait int, login registryLogin, run dockerRunner) int {
 	refuse := func(what string, problems []string) int {
 		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s\n", what)
 		for _, p := range problems {
@@ -621,6 +721,13 @@ func runInstall(archive, root, identity string, wait int, run dockerRunner) int 
 			name = p.idx.Service
 		}
 		return refuse(name+" cannot be installed here; nothing was written", problems)
+	}
+	pulled, problems := p.pull(login, run)
+	for _, r := range pulled {
+		fmt.Printf("      %s\n", r)
+	}
+	if len(problems) > 0 {
+		return refuse(p.idx.Service+": the images could not be pulled; nothing was written", problems)
 	}
 	if err := p.lay(root); err != nil {
 		return refuse(p.idx.Service+": laying the files down", []string{err.Error()})

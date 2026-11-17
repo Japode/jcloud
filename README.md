@@ -49,8 +49,10 @@ jcloud export <service> [--root <dir>] -o <f>   run on the host: one service's
                                                 --leave names it
 jcloud install <archive> [--root <dir>]         run on the target: lay an export
       [--identity <f>] [--wait-timeout <s>]     down in an empty place, restore
-                                                its data before it starts, start
-                                                it and the edge
+      [--registry-token-file <f>                its data before it starts, start
+       --registry-user <name>]                  it and the edge; every pinned
+                                                image is pulled first, logged in
+                                                with the token when one is given
 jcloud version
 ```
 

@@ -93,30 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT37 install pulls a private image with a registry token
-
-The archive carries pins, not images: the target pulls the same digests the source runs.
-fespsp-institucional's package on GHCR is private, and the owner wants it pulled the way
-the platform already does it: Japode/cloud's Deploy workflow logs in with
-GHCR_READ_TOKEN, a PAT with `read:packages`, because a repository's own GITHUB_TOKEN
-reaches only that repository's packages. A fresh server has neither the runner nor that
-login.
-
-`install --registry-token-file <path>` (or `JCLOUD_REGISTRY_TOKEN`) logs in to each
-registry the pins name, pulls every pinned digest, the service's and each addon's, and
-only then touches a volume. The pull moves to the front of JCT36's order: a token that
-is wrong or expired then fails the move on an untouched server, not halfway through a
-restore.
-
-The token is never written into the archive or the laid-down tree, and the login lands
-in the invoking user's docker config, as a manual `docker login` would. `install` says
-so, and says how to log out.
-
-Not done here: shipping images inside the archive (`docker save`). It was the
-alternative for a host with no registry access at all, and nothing in this move needs
-it. The IPv6 pull resets measured on this provider (cloud JC102) are answered by the
-host setup in JCT38, not by avoiding the registry.
-
 ### §JCT38 jcloud host apply: build the server from host:
 
 Decided by the owner: jcloud installs everything on an empty server, and Japode/cloud's
