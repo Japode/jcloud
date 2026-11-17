@@ -43,3 +43,6 @@
 - ✅ **JCT26** **Two surveys in a row cannot say what changed between them, so a fresh failure reads the same as standing drift** — survey --since <last run> marks each finding new or standing and lists the gone ones, matched by a stable code and subject (design recorded in `survey.go`).
 - ✅ **JCT27** **survey prints prose only, so a scheduler cannot tell one finding from another without parsing English sentences** — survey --json prints each finding with a stable code, its subject and, with --since, new, standing or gone, so an alert keys on the fact.
 - ✅ **JCT28** **Nothing runs survey on a schedule, so drift and failed jobs are found only when somebody thinks to look** — contrib/ ships a systemd timer and a self-hosted workflow that observe, survey against the last run and keep one GitHub issue per finding.
+
+## Block F — Moving a service: one archive carries it to an empty server
+

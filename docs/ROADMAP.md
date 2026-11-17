@@ -13,6 +13,17 @@
 - ⏳ **JCT23** (deps: cloud C190) **survey holds a server only to its services; the timers, modes and firewall it needs are asserted in hand-written bash** — a manifest's declared backup implying its own timer, once a manifest can say it runs one. → §JCT23
 - 📋 **JCT29** (deps: JCT21 ✅, JCT24 ✅, JCT25 ✅, JCT28 ✅, cloud C190) **Viglet Cloud's server is watched by nothing that reads it against what its own tree declares** — Adopting it with only jcloud.yml and manifests, no Viglet bash, is the proof the watch is transparent to a platform. → §JCT29
 
+## Block F — Moving a service: one archive carries it to an empty server
+
+- 📋 **JCT32** (deps: —) **Copying a service to another server means gathering its compose, route, manifest, addon and image pins by hand** — The manifest and jcloud.yml already name every file a service is made of, so the set an archive needs is derived, not listed. → §JCT32
+- 📋 **JCT33** (deps: JCT32) **A service's env values reach another server only by pasting its secrets by hand** — The manifest lists every key it reads and which are secret, and env already speaks age, so the archive can carry exactly those values encrypted. → §JCT33
+- 📋 **JCT34** (deps: JCT32) **A service's volumes and databases leave the server only as restic snapshots another host cannot open alone** — The manifest's volumes and each need's addon backup directive already say what the state is and how to dump it consistently. → §JCT34
+- 📋 **JCT35** (deps: JCT34) **State a manifest does not declare, such as fespsp's plugins in an anonymous volume, is lost by a move without a word** — A restored site missing its plugins comes up healthy and broken, so export must name every mount it is not carrying. → §JCT35
+- 📋 **JCT36** (deps: JCT33, JCT34) **Nothing installs an exported service on a new server; the restore order in DEPLOY.md is followed by hand** — The order is not optional: fespsp's image seeds fresh content on first boot unless the restored database is already there. → §JCT36
+- 💭 **JCT37** (deps: JCT36) **install needs a server that can already pull the service's image from GHCR** — A private image or a host without registry credentials stops the move at the first pull, after the data was already restored. → §JCT37
+- 💭 **JCT38** (deps: JCT36) **An empty server has no docker, no unprivileged deploy user and no firewall, and install cannot start there** — Japode does this in scripts/bootstrap-server.sh; whether jcloud prepares the host or only refuses with that remedy is a scope call. → §JCT38
+- 💭 **JCT39** (deps: JCT36) **A service installed under a different host name keeps serving and linking the old one** — Testing a move on a staging name before the DNS cutover is the safe order, and WordPress stores its URL in the database. → §JCT39
+
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and

@@ -13,3 +13,5 @@
 
 ## Block E — Watching the server: jcloud reads the running machine on its own
 
+## Block F — Moving a service: one archive carries it to an empty server
+
