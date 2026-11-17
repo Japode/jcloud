@@ -93,27 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT33 export carries the env, encrypted
-
-`export` reads the value of every key the manifest declares (with its `env_prefix`, plus
-each `shared: true` key by its bare name) from the deployed `.env`, or from `.env.age`
-through the same code `jcloud env render` uses, and writes them as `env.age` inside the
-archive, encrypted to `--recipient <age public key>` (repeatable). No recipient, no
-export: an archive with the database password and the SMTP credential in clear is a file
-that leaks by being copied.
-
-Only that service's keys travel. A server holding several services has a `.env` with all
-of them, and the target receives this one's.
-
-A key the manifest declares with no value on the source and no default is reported, not
-invented. `install` will refuse to start the service with it missing, which is the same
-rule `agree` holds the `.env.example` to.
-
-For fespsp-institucional that is the 14 FESPSP_INSTITUCIONAL_* keys the manifest does
-not fix with `value:`, three of them secret: WORDPRESS_DB_PASSWORD, WP_ADMIN_PASS and
-SMTP_PASS. Keys the edge needs (FESPSP_INSTITUCIONAL_HOSTS, read by the Caddy route) are
-found by reading the route for `{$…}` placeholders, not by a list kept here.
-
 ### §JCT34 export carries the data
 
 Each volume the manifest declares becomes `data/<volume>.tar` in the archive, read
@@ -162,7 +141,7 @@ container.
 does, in this order, what docs/DEPLOY.md does by hand:
 
 1. Verify `jcloud-export.json` (schema, checksums), prepare the host from `host:` (JCT38) and pull every pinned digest (JCT37). Refuse a root where the service already has containers or volumes: install is for an empty place, never an overwrite, so it cannot be mistaken for a deploy.
-2. Lay down the files under `--root`; merge the service's keys into `.env` (mode 600) and its pins into `pin_file`, keeping lines already there.
+2. Lay down the files under `--root`; open the index's `env` member and merge its keys into `.env` (mode 600), refusing while `env_missing` or an edge key (ACME_EMAIL) is unset, and its pins into `pin_file`, keeping lines already there.
 3. Create the volumes, untar each one, start only the database needs, wait for their healthchecks, feed each dump in.
 4. Start the service and the edge, and wait for the healthcheck under the same budget a deploy uses.
 5. Report what came back against what the archive recorded: volume sizes, table counts, health. Then `agree` on the laid-down tree.

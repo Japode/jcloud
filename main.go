@@ -136,7 +136,8 @@ func main() {
 	case "export":
 		// The second command that writes a file (JCT32): one service's platform
 		// files in an archive, derived from jcloud.yml and the manifest. Reads only
-		// the tree it runs in, like observe, and carries no configuration value.
+		// the tree it runs in, like observe, and carries the service's configuration
+		// only sealed to the recipients it is given (JCT33).
 		os.Exit(export(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
@@ -195,9 +196,11 @@ func usage() {
                                        prints the verbs and their flags
   jcloud export <service>              run in the deployed tree: write one
        [--root <dir>] -o <file>        service's compose, route, manifest,
-                                       addons, edge files and image pin to a
-                                       .tar.gz, with a sha256 per member.
-                                       No configuration values and no data
+       --recipient <age key> …         addons, edge files and image pin to a
+       [--identity <file>]             .tar.gz, with a sha256 per member, and
+                                       the values of the keys it reads, from
+                                       .env (or .env.age, opened with the
+                                       identity) sealed to each recipient
   jcloud version                      this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a

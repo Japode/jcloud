@@ -48,3 +48,4 @@
 
 - 🗑 **JCT39** **A service installed under a different host name keeps serving and linking the old one** — abandoned: The move will be tested by pointing a workstation's hosts file at the new server under the same name, so no rename is needed.
 - ✅ **JCT32** **Copying a service to another server means gathering its compose, route, manifest, addon and image pins by hand** — jcloud export packs one service's manifest, compose, route, addons, edge files and pin line into a .tar.gz whose index carries a sha256 per member (design recorded in `export.go`).
+- ✅ **JCT33** **A service's env values reach another server only by pasting its secrets by hand** — export now carries the values of exactly the keys the service reads, from .env or .env.age, sealed to each --recipient as jcloud-env.age; unset keys are listed (design recorded in `export_env.go`).

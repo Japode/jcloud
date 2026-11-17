@@ -10,6 +10,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"filippo.io/age"
 )
 
 const exportEdgeCompose = `name: japode-cloud
@@ -48,6 +50,7 @@ func exportTree(t *testing.T, extra map[string]string) string {
 		"addons/redis/addon.yml":            "version: 1\n",
 		".env.example":                      needyEnvExample,
 		".deploy-state/images.env":          "OTHER_IMAGE=ghcr.io/x/other@sha256:bbbb\nPASTE_IMAGE=ghcr.io/x/paste@sha256:aaaa\n",
+		".env":                              "# deployed\nPASTE_DB_PASSWORD='hunter2'\nPASTE_HOSTS=paste.example.org\nOTHER_SECRET=not-paste\n",
 	}
 	for k, v := range extra {
 		files[k] = v
@@ -151,7 +154,7 @@ func TestExportRefusesAnIncompleteService(t *testing.T) {
 	}
 
 	out := filepath.Join(t.TempDir(), "paste.tar.gz")
-	if code := export([]string{"paste", "--root", root, "-o", out}); code != 1 {
+	if code := export([]string{"paste", "--root", root, "--recipient", testRecipient(t).Recipient().String(), "-o", out}); code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
@@ -163,19 +166,8 @@ func TestExportRefusesAnIncompleteService(t *testing.T) {
 // index first and a checksum per file.
 func TestExportRoundTrips(t *testing.T) {
 	root := exportTree(t, nil)
-	out := filepath.Join(t.TempDir(), "paste.tar.gz")
-	if code := export([]string{"paste", "--root", root, "-o", out}); code != 0 {
-		t.Fatalf("exit %d", code)
-	}
-	f, err := os.Open(out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer f.Close()
-	idx, got, err := ReadExport(f)
-	if err != nil {
-		t.Fatal(err)
-	}
+	id := testRecipient(t)
+	idx, got := exportAndRead(t, root, id.Recipient().String())
 	if idx.Schema != ExportSchema || idx.Service != "paste" || idx.Created == "" || idx.Jcloud == "" {
 		t.Fatalf("index: %+v", idx)
 	}
@@ -187,8 +179,131 @@ func TestExportRoundTrips(t *testing.T) {
 	}
 	for name, data := range got {
 		if bytes.Contains(data, []byte("hunter2")) {
-			t.Fatalf("%s carries a configuration value", name)
+			t.Fatalf("%s carries a configuration value in clear", name)
 		}
+	}
+}
+
+func testRecipient(t *testing.T) *age.X25519Identity {
+	t.Helper()
+	id, err := age.GenerateX25519Identity()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func exportAndRead(t *testing.T, root string, extra ...string) (*ExportManifest, map[string][]byte) {
+	t.Helper()
+	out := filepath.Join(t.TempDir(), "paste.tar.gz")
+	args := []string{"paste", "--root", root, "-o", out}
+	for _, r := range extra {
+		args = append(args, "--recipient", r)
+	}
+	if code := export(args); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	f, err := os.Open(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	idx, got, err := ReadExport(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return idx, got
+}
+
+// openedEnv opens every value of an exported jcloud-env.age with id.
+func openedEnv(t *testing.T, data []byte, id age.Identity) map[string]string {
+	t.Helper()
+	f := ParseEnvFile(data)
+	out := map[string]string{}
+	for _, k := range f.Keys() {
+		b64, _ := f.Get(k)
+		v, err := open(b64, []age.Identity{id})
+		if err != nil {
+			t.Fatalf("%s: %v", k, err)
+		}
+		out[k] = string(v)
+	}
+	return out
+}
+
+// JCT33: exactly the keys the service reads travel, from the deployed .env, sealed
+// to every recipient: the manifest's non-fixed variables and the route's {$…}
+// placeholders, and not another service's key in the same .env.
+func TestExportCarriesTheServicesEnvSealed(t *testing.T) {
+	root := exportTree(t, nil)
+	a, b := testRecipient(t), testRecipient(t)
+	idx, got := exportAndRead(t, root, a.Recipient().String(), b.Recipient().String())
+	if idx.Env != ExportEnvMember {
+		t.Fatalf("index names env member %q", idx.Env)
+	}
+	want := map[string]string{"PASTE_DB_PASSWORD": "hunter2", "PASTE_HOSTS": "paste.example.org"}
+	for _, id := range []age.Identity{a, b} {
+		if env := openedEnv(t, got[ExportEnvMember], id); !reflect.DeepEqual(env, want) {
+			t.Fatalf("env: got %v, want %v", env, want)
+		}
+	}
+	if len(idx.EnvMissing) != 0 {
+		t.Fatalf("missing: %v", idx.EnvMissing)
+	}
+}
+
+// JCT33: with no .env deployed, the values come from .env.age opened with the
+// identity, and a key read with no value and no default is listed, not invented.
+// A route placeholder with a default is not missing.
+func TestExportEnvFromTheSealedStore(t *testing.T) {
+	store := testRecipient(t)
+	sealed, err := seal([]byte("from-age"), []age.Recipient{store.Recipient()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := exportTree(t, map[string]string{
+		EnvFileName: "recipient " + store.Recipient().String() + "\nOTHER_SECRET=" + sealed + "\n",
+	})
+	if err := os.Remove(filepath.Join(root, ".env")); err != nil {
+		t.Fatal(err)
+	}
+	// The secret lives under the service's key in the store this time.
+	f := ParseEnvFile(mustRead(t, filepath.Join(root, EnvFileName)))
+	f.Set("PASTE_DB_PASSWORD", sealed)
+	if err := os.WriteFile(filepath.Join(root, EnvFileName), f.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("JCLOUD_IDENTITY", store.String())
+
+	target := testRecipient(t)
+	_, got := exportAndRead(t, root, target.Recipient().String())
+	if env := openedEnv(t, got[ExportEnvMember], target); !reflect.DeepEqual(env, map[string]string{"PASTE_DB_PASSWORD": "from-age"}) {
+		t.Fatalf("env: %v", env)
+	}
+
+	// Unset now, and the manifest gives it no default: reported.
+	f.Unset("PASTE_DB_PASSWORD")
+	if err := os.WriteFile(filepath.Join(root, EnvFileName), f.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	idx, _ := exportAndRead(t, root, target.Recipient().String())
+	if !reflect.DeepEqual(idx.EnvMissing, []string{"PASTE_DB_PASSWORD"}) {
+		t.Fatalf("missing: %v", idx.EnvMissing)
+	}
+}
+
+// JCT33: no recipient is the arguments being wrong, and nothing is written.
+func TestExportWithoutARecipientIsRefused(t *testing.T) {
+	root := exportTree(t, nil)
+	out := filepath.Join(t.TempDir(), "paste.tar.gz")
+	if code := export([]string{"paste", "--root", root, "-o", out}); code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+	if code := export([]string{"paste", "--root", root, "--recipient", "not-a-key", "-o", out}); code != 1 {
+		t.Fatalf("a malformed recipient: exit %d, want 1", code)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("a refused export left %s behind", out)
 	}
 }
 

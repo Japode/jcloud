@@ -7,10 +7,10 @@
 // the pin file sit, and the manifest says which needs it has. So the set is derived
 // here, from the same resolution `agree` makes, and never listed.
 //
-// This is the skeleton the rest of the move fills: the platform's files and the
-// format, with no configuration values and no data. A file named like `.env` in the
-// service's directory is left out and said to be, because what the configuration
-// holds is secret and travels encrypted or not at all.
+// This is the platform's files and the format. The configuration travels sealed,
+// as one member export_env.go writes (JCT33), and never as a file of the tree: a
+// file named like `.env` in the service's directory is left out and said to be,
+// because what it holds is secret and travels encrypted or not at all.
 //
 // The archive is a gzipped tar. At its root sits jcloud-export.json, which says
 // which schema it is, which build wrote it, for which service, from which host and
@@ -67,6 +67,10 @@ type ExportManifest struct {
 	// What the service's directory holds and the archive does not, by name, so
 	// that the reading side is told rather than left to notice.
 	Left []string `json:"left,omitempty"`
+	// The member holding the sealed configuration, and the keys the service reads
+	// that the source had no value and no default for (JCT33).
+	Env        string   `json:"env,omitempty"`
+	EnvMissing []string `json:"env_missing,omitempty"`
 }
 
 // ExportMember is one file in the archive, at the path it has under the root.
@@ -408,14 +412,19 @@ func ReadExport(r io.Reader) (*ExportManifest, map[string][]byte, error) {
 // export is the command. It writes beside the target and renames, so a refused or
 // interrupted export never leaves a half archive under the name asked for.
 func export(args []string) int {
-	usage := "jcloud export <service> [--root <dir>] -o <file>.tar.gz"
-	root, out, name := ".", "", ""
+	usage := "jcloud export <service> [--root <dir>] --recipient <age public key> … [--identity <file>] -o <file>.tar.gz"
+	root, out, name, identity := ".", "", "", ""
+	var recipients []string
 	for len(args) > 0 {
 		switch {
 		case args[0] == "--root" && len(args) >= 2:
 			root, args = args[1], args[2:]
 		case args[0] == "-o" && len(args) >= 2:
 			out, args = args[1], args[2:]
+		case args[0] == "--recipient" && len(args) >= 2:
+			recipients, args = append(recipients, args[1]), args[2:]
+		case args[0] == "--identity" && len(args) >= 2:
+			identity, args = args[1], args[2:]
 		case !strings.HasPrefix(args[0], "-") && name == "":
 			name, args = args[0], args[1:]
 		default:
@@ -427,8 +436,26 @@ func export(args []string) int {
 		fmt.Fprintln(os.Stderr, usage)
 		return 2
 	}
+	// Refused before anything is read: a recipient is not optional, and the values
+	// are never carried in clear (JCT33).
+	if len(recipients) == 0 {
+		fmt.Fprintf(os.Stderr, "jcloud export: no --recipient, so nothing could open the configuration this carries\n%s\n", usage)
+		return 2
+	}
 
 	files, left, problems := ExportSet(root, name)
+	var envMissing []string
+	envFrom := ""
+	if len(problems) == 0 {
+		member, missing, from, err := ExportEnv(root, name, identity, recipients)
+		if err != nil {
+			problems = append(problems, "configuration: "+err.Error())
+		} else {
+			files = append(files, member)
+			sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
+			envMissing, envFrom = missing, from
+		}
+	}
 	if len(problems) > 0 {
 		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s cannot be exported\n", name)
 		for _, p := range problems {
@@ -440,6 +467,7 @@ func export(args []string) int {
 	idx := ExportManifest{
 		Schema: ExportSchema, Jcloud: Version(), Service: name, SourceHost: host,
 		Created: time.Now().UTC().Format(time.RFC3339), Left: left,
+		Env: ExportEnvMember, EnvMissing: envMissing,
 	}
 	var buf bytes.Buffer
 	if err := WriteExport(&buf, idx, files); err != nil {
@@ -472,8 +500,12 @@ func export(args []string) int {
 		}
 		fmt.Printf("      %s%s\n", f.Path, suffix)
 	}
+	fmt.Printf("      configuration from %s, sealed to %d recipient(s) in %s\n", envFrom, len(recipients), ExportEnvMember)
 	for _, l := range left {
-		fmt.Printf("      \033[33m!\033[0m %s left out: configuration is not carried by this archive\n", l)
+		fmt.Printf("      \033[33m!\033[0m %s left out: configuration travels sealed in %s, never as a file\n", l, ExportEnvMember)
+	}
+	for _, k := range envMissing {
+		fmt.Printf("      \033[33m!\033[0m %s has no value in %s and no default; the service will not start on the target without it\n", k, envFrom)
 	}
 	return 0
 }
