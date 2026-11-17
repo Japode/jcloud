@@ -185,7 +185,7 @@ container.
 `jcloud install <archive> --root <dir> --identity <age key>` runs on the target and
 does, in this order, what docs/DEPLOY.md does by hand:
 
-1. Verify `jcloud-export.json`: schema, checksums, and that docker and compose answer. Refuse a root where the service already has containers or volumes: install is for an empty place, never an overwrite, so it cannot be mistaken for a deploy.
+1. Verify `jcloud-export.json` (schema, checksums), prepare the host from `host:` (JCT38) and pull every pinned digest (JCT37). Refuse a root where the service already has containers or volumes: install is for an empty place, never an overwrite, so it cannot be mistaken for a deploy.
 2. Lay down the files under `--root`; merge the service's keys into `.env` (mode 600) and its pins into `pin_file`, keeping lines already there.
 3. Create the volumes, untar each one, start only the database needs, wait for their healthchecks, feed each dump in.
 4. Start the service and the edge, and wait for the healthcheck under the same budget a deploy uses.
@@ -199,45 +199,75 @@ Not done: DNS. The edge gets its certificate on the first request after the name
 here; install prints that as the remaining step, with the host names the route answers
 for.
 
-### §JCT37 export --images: the images inside the archive
+### §JCT37 install pulls a private image with a registry token
 
-By default the archive carries pins, not images: the target pulls the same digests. That
-fails where the image is private and the new host has no `docker login` for ghcr.io, and
-on this platform's provider, where large pulls over IPv6 were measured to reset (cloud
-JC102).
+The archive carries pins, not images: the target pulls the same digests the source runs.
+fespsp-institucional's package on GHCR is private, and the owner wants it pulled the way
+the platform already does it: Japode/cloud's Deploy workflow logs in with
+GHCR_READ_TOKEN, a PAT with `read:packages`, because a repository's own GITHUB_TOKEN
+reaches only that repository's packages. A fresh server has neither the runner nor that
+login.
 
-`export --images` adds `images/<name>.tar` from `docker save` of each pinned digest, the
-service's and each addon's. `install` loads them before step 3 and checks the loaded
-digest equals the pin, so an archive cannot swap an image under the same name.
+`install --registry-token-file <path>` (or `JCLOUD_REGISTRY_TOKEN`) logs in to each
+registry the pins name, pulls every pinned digest, the service's and each addon's, and
+only then touches a volume. The pull moves to the front of JCT36's order: a token that
+is wrong or expired then fails the move on an untouched server, not halfway through a
+restore.
 
-The cost is size: fespsp-institucional's image is about 280 MB, which is why it is a
-flag and not the default. Open question for the owner: is the GHCR package public, and
-will the new server get a registry token? If both are yes, this stays an idea.
+The token is never written into the archive or the laid-down tree, and the login lands
+in the invoking user's docker config, as a manual `docker login` would. `install` says
+so, and says how to log out.
 
-### §JCT38 A host install cannot start on
+Not done here: shipping images inside the archive (`docker save`). It was the
+alternative for a host with no registry access at all, and nothing in this move needs
+it. The IPv6 pull resets measured on this provider (cloud JC102) are answered by the
+host setup in JCT38, not by avoiding the registry.
 
-"An empty server" in the request means a fresh machine. JCT36 assumes docker and compose
-answer, and refuses otherwise. Two ways forward, not decided:
+### §JCT38 jcloud host apply: build the server from host:
 
-- **Refuse with the remedy** (smallest): install checks docker, compose, free ports 80/443 and, when jcloud.yml declares `host:`, prints what `survey` would hold the machine to. The platform's own bootstrap stays the platform's. For Japode that is `sudo bash scripts/bootstrap-server.sh`, which the archive already carries if JCT32 includes `scripts/`.
-- **`install --bootstrap`**: jcloud installs docker and sets up the user, directory modes and ufw itself. This makes jcloud a provisioning tool, a different product from one that checks and moves services, and it would duplicate a script the platform already tests.
+Decided by the owner: jcloud installs everything on an empty server, and Japode/cloud's
+bootstrap-server.sh is replaced by it rather than kept beside it (cloud task, filed
+there). The duplication is avoided by abstraction: the script's steps become `host:`
+declarations (JCT40), and `jcloud host apply` makes the machine match them.
 
-The recommendation is the first, with the archive carrying the platform's bootstrap
-script so the empty server needs only the archive and jcloud. Decide before JCT36 is
-built, because it fixes what step 1 checks.
+`sudo jcloud host apply [--root <dir>]`, idempotent, each step a no-op when it already
+holds:
 
-### §JCT39 install --host: a move to a new name
+1. Docker engine and the compose plugin, from Docker's own apt repository (Debian and Ubuntu first; another distribution is refused by name, not guessed at), plus each tool in `requires:`.
+2. The user and its groups.
+3. Each path with its mode and owner.
+4. The sysctl entries, in one file under /etc/sysctl.d naming jcloud and each entry's `why:`.
+5. The firewall: SSH is allowed before ufw is enabled, never the other way round. Enabling ufw over SSH without that rule locks the machine away from the person running it, which is why the script today only advises.
 
-The safe way to move fes-inst.sumware.com.br is to install it first under a test name,
-check it, then point DNS. Changing `FESPSP_INSTITUCIONAL_HOSTS` and `WP_URL` in the
-target's `.env` covers the route and WP_HOME, but WordPress writes absolute URLs into
-post content and options, so links and images still point at the old host.
+Then it runs the checks `survey` would and prints any that still differ.
 
-`install --host <name>` would set every key whose default is the route's host, and then
-run a rewrite the manifest declares, because only the service knows how its data names
-itself. For WordPress that is `wp search-replace <old> <new> --all-tables` inside the
-container. A manifest field such as `rehost: [cmd…]` with `{from}` and `{to}` keeps
-jcloud free of WordPress knowledge.
+`install` (JCT36) runs `host apply` first when jcloud.yml declares `host:`, so an empty
+server needs `jcloud install <archive>` and nothing else.
 
-An idea until the first move: if the plan is to cut DNS straight to the new server under
-the same name, nothing here is needed.
+Outside: the GitHub runner registration, the platform's way of deploying and not part of
+a move. A writing verb changes what jcloud is; this one is invoked by a person and never
+by the watch, so the non-goal on unattended repair still holds.
+
+### §JCT40 host: declares what a server is built with
+
+Japode/cloud's scripts/bootstrap-server.sh sets up four things `host:` cannot say today:
+a non-root deploy user in the docker group, the deploy directory and its pin file (750
+and 600, owned by that user), the firewall's open ports (80/tcp, 443/tcp, 443/udp) and a
+sysctl file turning IPv6 off on a provider whose v6 path resets large pulls (cloud
+JC102). `host.paths` covers the second already; the rest is new:
+
+```yaml
+host:
+  user: {name: runner, groups: [docker]}
+  firewall: {kind: ufw, allow: [OpenSSH, 80/tcp, 443/tcp, 443/udp]}
+  sysctl: {net.ipv6.conf.all.disable_ipv6: "1", net.ipv6.conf.default.disable_ipv6: "1"}
+  requires: [docker, compose, rsync, git]
+```
+
+`observe` reads each one (`id`, `ufw status`, `sysctl -n`, `command -v`) and `survey`
+reports each difference with a stable code, like the timers and modes before them
+(JCT23). This task only declares and checks. Changing the machine is JCT38.
+
+The sysctl entry keeps the reason the script states: it is right only while no name on
+the host has an AAAA record. A `why:` beside an entry carries that sentence into the
+file jcloud writes.

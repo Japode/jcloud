@@ -46,3 +46,4 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
+- 🗑 **JCT39** **A service installed under a different host name keeps serving and linking the old one** — abandoned: The move will be tested by pointing a workstation's hosts file at the new server under the same name, so no rename is needed.
