@@ -78,6 +78,9 @@ func (m *fakeMachine) run(name string, args ...string) (string, error) {
 		m.stats[args[0]] = "644 root:root"
 	case name == "chown":
 		f := strings.Fields(m.stats[args[1]])
+		if len(f) == 0 {
+			f = []string{"644"}
+		}
 		m.stats[args[1]] = f[0] + " " + args[0]
 	case name == "chmod" && args[0] != "a+r":
 		f := strings.Fields(m.stats[args[1]])

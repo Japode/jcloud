@@ -280,6 +280,63 @@ func TestExportCarriesTheTimersScriptsAndKeys(t *testing.T) {
 	}
 }
 
+// JCT50: an install as root into a target whose host: declares a user hands that
+// user what it created (the directories outermost first, and the files), and .env
+// and the pin file even when they were already there, before the timers that run
+// as it are installed; a file the target held before keeps its owner.
+func TestInstallHandsWhatItLaysToTheHostUser(t *testing.T) {
+	withSysRoot(t, "ID=debian\nVERSION_CODENAME=bookworm\n")
+	root := timersTree(t, timersProfile)
+	id := testRecipient(t)
+	archive := filepath.Join(t.TempDir(), "paste.tar.gz")
+	if code := export([]string{"paste", "--root", root, "--recipient", id.Recipient().String(), "-o", archive}); code != 0 {
+		t.Fatalf("export: exit %d", code)
+	}
+	t.Setenv("JCLOUD_IDENTITY", id.String())
+
+	var log []string
+	m := newTimerMachine()
+	m.log = &log
+	was := hostRun
+	hostRun = m.run
+	t.Cleanup(func() { hostRun = was })
+	// The operator wrote .env before the install, as root; the edge's compose file
+	// was the target's own.
+	target := layTree(t, map[string]string{".env": "ACME_EMAIL=ops@example.org\n", "docker-compose.yml": exportEdgeCompose})
+	if code := runInstall(archive, target, "", 60, registryLogin{}, newFakeInstall().run); code != 0 {
+		t.Fatalf("exit %d\n%s", code, strings.Join(log, "\n"))
+	}
+	chowned := func(rel string) int {
+		for i, l := range log {
+			if l == "host chown runner: "+filepath.Join(target, filepath.FromSlash(rel)) {
+				return i
+			}
+		}
+		return -1
+	}
+	for _, rel := range []string{".env", ".deploy-state/images.env", "services", "services/paste", "services/paste/japode.yml", "scripts/backup.sh"} {
+		if chowned(rel) < 0 {
+			t.Fatalf("%s was not handed to runner:\n%s", rel, strings.Join(log, "\n"))
+		}
+	}
+	if chowned("docker-compose.yml") >= 0 {
+		t.Fatal("a file the target already held changed owner")
+	}
+	if chowned("services") > chowned("services/paste") || chowned("services/paste") > chowned("services/paste/japode.yml") {
+		t.Fatal("a directory was handed over after what it holds")
+	}
+	enable := -1
+	for i, l := range log {
+		if strings.HasPrefix(l, "host systemctl enable --now") {
+			enable = i
+			break
+		}
+	}
+	if enable < 0 || chowned(".env") > enable {
+		t.Fatalf(".env at %d, timers enabled at %d", chowned(".env"), enable)
+	}
+}
+
 // JCT43: install prepares the host without the timers, lays the tree down and
 // starts the service, and installs the timers last, so their scripts are there.
 func TestInstallInstallsTheTimersLast(t *testing.T) {

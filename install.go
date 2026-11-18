@@ -12,7 +12,9 @@
 //     a compose file requires with `${KEY:?}` (the edge's ACME_EMAIL), is unset.
 //     Then the files are laid down. A shared file the target already has is kept as
 //     it is, and said to differ when it does: it is the target platform's, not this
-//     service's.
+//     service's. When host: declares a user, what install created, and .env and the
+//     pin file, are handed to it (JCT50): install runs as root, and the timers and
+//     the platform's deploy run as that user.
 //  3. Create the containers, copy each volume's tar into its own container (with
 //     the sqlite copies in place of the live files, and their -wal and -shm left
 //     out), start only the database needs, wait for them, feed each dump in, and
@@ -558,30 +560,78 @@ func composeTop(data []byte) (string, []string, error) {
 	return top.Name, services, nil
 }
 
-// lay writes every planned file under root: .env at 0600, the rest at 0644.
-func (p *installPlan) lay(root string) error {
+// lay writes every planned file under root: .env at 0600, the rest at 0644. It
+// answers what it created, directories first, each before what it holds: the
+// paths install hands to the host's user (JCT50). A file it rewrote that was
+// already there is not among them.
+func (p *installPlan) lay(root string) (created []string, err error) {
 	paths := make([]string, 0, len(p.write))
 	for rel := range p.write {
 		paths = append(paths, rel)
 	}
 	sort.Strings(paths)
+	seen := map[string]bool{}
 	for _, rel := range paths {
 		dest := filepath.Join(root, filepath.FromSlash(rel))
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			return err
+		// The directories this creates, outermost first.
+		var dirs []string
+		for d := filepath.Dir(dest); d != root && len(d) > len(root); d = filepath.Dir(d) {
+			if _, err := os.Stat(d); err == nil {
+				break
+			}
+			dirs = append([]string{d}, dirs...)
 		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return created, err
+		}
+		for _, d := range dirs {
+			if !seen[d] {
+				seen[d] = true
+				created = append(created, d)
+			}
+		}
+		_, statErr := os.Stat(dest)
 		mode := os.FileMode(0o644)
 		if rel == ".env" {
 			mode = 0o600
 		}
 		if err := os.WriteFile(dest, p.write[rel], mode); err != nil {
-			return err
+			return created, err
 		}
 		if err := os.Chmod(dest, mode); err != nil {
-			return err
+			return created, err
+		}
+		if statErr != nil && !seen[dest] {
+			seen[dest] = true
+			created = append(created, dest)
 		}
 	}
-	return nil
+	return created, nil
+}
+
+// handOver gives the host's user what install created, and .env and the pin file
+// whoever made them (JCT50). install runs as root when host: declares setup, and
+// the timers and the platform's deploy run as host.user: a root-owned .env is one
+// they cannot read, and root-owned files in the tree are ones a deploy cannot
+// replace. Everything else the target already held keeps its owner. `user:`
+// gives the group the user logs in with.
+func (p *installPlan) handOver(root string, user *HostUser, created []string, run commandRunner) (string, error) {
+	if user == nil {
+		return "", nil
+	}
+	paths := append([]string{}, created...)
+	for _, own := range []string{filepath.Join(root, ".env"), filepath.Join(root, filepath.FromSlash(p.prof.PinFile))} {
+		if _, err := os.Stat(own); err == nil && !contains(paths, own) {
+			paths = append(paths, own)
+		}
+	}
+	owner := user.Name + ":"
+	for _, at := range paths {
+		if _, err := run("chown", owner, at); err != nil {
+			return "", err
+		}
+	}
+	return fmt.Sprintf("%d path(s) handed to %s, .env and the pin file among them", len(paths), user.Name), nil
 }
 
 // compose is the argv deploy.sh would run, with args after it.
@@ -969,10 +1019,18 @@ func runInstall(archive, root, identity string, wait int, login registryLogin, r
 	if len(problems) > 0 {
 		return refuse(p.idx.Service+": the images could not be pulled; nothing was written", problems)
 	}
-	if err := p.lay(root); err != nil {
+	created, err := p.lay(root)
+	if err != nil {
 		return refuse(p.idx.Service+": laying the files down", []string{err.Error()})
 	}
 	fmt.Printf("  \033[32m✓\033[0m %s: %d file(s) laid down under %s\n", p.idx.Service, len(p.write), root)
+	// Handed to the host's user before anything runs as it: the restore below does
+	// not, the timers installed last do (JCT50).
+	if said, err := p.handOver(root, h.User, created, hostRun); err != nil {
+		return refuse(p.idx.Service+": the files are laid down and could not be handed to "+h.User.Name, []string{err.Error()})
+	} else if said != "" {
+		fmt.Printf("      %s\n", said)
+	}
 	report, problems := p.restore(archive, root, wait, run)
 	for _, r := range report {
 		fmt.Printf("      %s\n", r)

@@ -67,7 +67,9 @@ jcloud install <archive> [--root <dir>]         run on the target: lay an export
                                                 hosts-file test answers over HTTPS
                                                 before DNS moves;
                                                 host apply runs first when the
-                                                archive's jcloud.yml has host:
+                                                archive's jcloud.yml has host:,
+                                                and what install writes is
+                                                handed to host.user
 jcloud host apply [--root <dir>]                as root: make the machine what
                                                 host: declares, then survey it
 jcloud backup [--root <dir>]                    every named volume to the restic

@@ -92,27 +92,3 @@ Anything that adoption has to work around is filed here as its own line, the way
 was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
-
-### §JCT50 install hands what it lays to host.user
-
-Found checking fespsp-institucional's cutover plan (FI194). `install` has to run as root
-when the target's `host:` declares setup, since it runs `host apply` first. Everything
-it then writes is root's: `.env` at 0600, the pin file it merges into when host apply
-did not create it, and every member it lays (the route, an addon, a carried `scripts/`
-the target does not have). `host apply` chowns only the paths `host.paths` names, and
-`.` is the root directory itself, not its contents.
-
-On that site's server the result is a site that comes up and then breaks: the three
-timers run as `runner` (`User=` from `host.user`) and cannot open the root-owned `.env`,
-and the `implantar` job, also `runner`, fails to rewrite `.env` from SERVICES_ENV and
-fails `rsync --delete` over root-owned files in the clone. The plan's workaround is
-`sudo chown -R runner:runner` after install.
-
-What to build: when the target's `host:` declares a user, `install` chowns `.env`, the
-pin file and every path it wrote to that user and its primary group, after laying them
-and before the final `host apply` installs the timers. Files the target already had keep
-their owner. The report says which owner it set.
-
-Done when an install as root into a target whose `host.user` is `runner` leaves `.env`,
-the pin file and the laid files owned by `runner`, and nothing the target held before
-changes owner.
