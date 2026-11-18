@@ -110,6 +110,12 @@ func TestAddonsAndTheEdgeAreDeclaredAndNotStrangers(t *testing.T) {
 		}
 		// What holds on every platform: a server running exactly what it declares
 		// is silence.
+		//
+		// About containers only. A platform whose jcloud.yml declares host: (Japode/cloud
+		// since its JC108) would otherwise fail here on every host entry, because this
+		// observation carries no host lines; what host: asks of a server is held by
+		// host_test.go and host_setup_test.go, against observations written for it.
+		d.Host = Host{}
 		o := &Observed{Containers: map[string]string{}, Pinned: map[string]string{}, Running: map[string]string{}}
 		for _, name := range append(append([]string{}, d.Services...), d.Others...) {
 			o.Containers[name] = "healthy"
