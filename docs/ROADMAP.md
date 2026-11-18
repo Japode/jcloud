@@ -15,8 +15,6 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT46** (deps: —) **A platform without Japode's bash has no backup, restore drill or health watch: a timer can only run a script it carries** — A site's own jcloud/ folder declares volumes, backup.conf and health, which is enough for jcloud to run the three jobs itself. → §JCT46
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
@@ -48,7 +46,10 @@
 
 ## Non-goals
 
-- **An alert channel inside jcloud** The watch templates alert with the platform's token
-  on the platform's machine; jcloud reports and sends nothing (JC1, JCT28).
 - **A repair the watch runs on its own** A repair that writes to the server has to argue
   why it is not a deploy (JC96); a timer firing it unattended would skip that argument.
+- **An alert channel beyond the one webhook the platform configures** The owner decided
+  jcloud healthwatch posts its DOWN and UP lines to ALERT_WEBHOOK_URL (JCT46), so a
+  platform with no bash still gets told. Routing, escalation, other channels and a
+  second sender stay out; the survey watch templates still alert with the platform's own
+  token (JCT28).

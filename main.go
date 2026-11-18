@@ -149,6 +149,15 @@ func main() {
 		// a platform's bootstrap script. Invoked by a person, as root; the watch
 		// never runs it.
 		os.Exit(hostCmd(args[1:]))
+	case "backup":
+		// The platform's jobs as verbs (JCT46), so a timer's run: is a jcloud
+		// command and not a script the platform has to carry: they read the layout
+		// through jcloud.yml, which a script walking services/ cannot.
+		os.Exit(backupCmd(args[1:]))
+	case "restore-test":
+		os.Exit(restoreTestCmd(args[1:]))
+	case "healthwatch":
+		os.Exit(healthwatchCmd(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
 		// other half of what determines this binary's behaviour, and a report about
@@ -231,6 +240,17 @@ func usage() {
                                        declares (docker and tools, the user,
                                        paths, sysctl, ufw with SSH allowed
                                        before it is enabled), then survey it
+  jcloud backup [--root <dir>]         run on the host: every named volume to
+                                       the restic repository .env names, each
+                                       sqlite file with VACUUM INTO and each
+                                       mysql volume as a dump (backup.conf)
+  jcloud restore-test [--root <dir>]   restore the newest snapshot into a
+       [--wait-timeout <seconds>]      project of its own and ask it whether
+       [--cleanup]                     it works; --cleanup only removes what
+                                       an earlier drill left
+  jcloud healthwatch [--root <dir>]    say when a service goes down or comes
+                                       back, after HEALTH_GRACE_SECONDS, to
+                                       stdout and ALERT_WEBHOOK_URL
   jcloud version                    this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a

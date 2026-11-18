@@ -7,7 +7,11 @@ render or deploy anything, with one exception: moving a service to another serve
 commands change something: `env`, the encrypted configuration; `export`, which packs one
 service's files and data into an archive; `install`, which unpacks that archive on the new
 server and starts the service; and `host apply`, which prepares an empty server from
-`jcloud.yml`'s `host:`.
+`jcloud.yml`'s `host:`. Three more run the server's jobs from what the platform declares,
+so a timer runs a jcloud command instead of a script the platform has to carry: `backup`
+to a restic repository, `restore-test`, which restores the newest snapshot and starts
+it, and `healthwatch`, which posts to the platform's webhook when a service goes down
+or comes back.
 
 The product page, with a real run of every verb, is at https://japode.com/jcloud/ (built
 from [`site/`](site/README.md)).
@@ -65,6 +69,16 @@ jcloud install <archive> [--root <dir>]         run on the target: lay an export
                                                 archive's jcloud.yml has host:
 jcloud host apply [--root <dir>]                as root: make the machine what
                                                 host: declares, then survey it
+jcloud backup [--root <dir>]                    every named volume to the restic
+                                                repository .env names, each sqlite
+                                                file with VACUUM INTO and each
+                                                mysql volume as a dump
+jcloud restore-test [--root <dir>]              restore the newest snapshot into a
+      [--wait-timeout <s>] [--cleanup]          project of its own and ask it
+                                                whether it works
+jcloud healthwatch [--root <dir>]               say when a service goes down or
+                                                comes back, to stdout and to
+                                                ALERT_WEBHOOK_URL
 jcloud version
 ```
 

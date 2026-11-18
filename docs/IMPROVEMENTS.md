@@ -92,27 +92,3 @@ Anything that adoption has to work around is filed here as its own line, the way
 was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
-
-### §JCT46 Backup, restore drill and health watch as jcloud verbs
-
-Filed from fespsp-institucional (FI194, 2026-11-18). That site now declares its own
-server in a `jcloud/` folder (JCT44, JCT45), and `host.timers` is the one part it could
-not fill: every timer Japode/cloud runs is a bash script of that repository
-(`scripts/backup.sh`, `restore-test.sh`, `healthwatch.sh`) that walks `services/*/` and
-sources its neighbours. Carried by export, they land on the target and read a layout the
-target does not have, so a server with `service_dir: service` would back up nothing and
-report it as success.
-
-What jcloud already knows is enough to do the three jobs from declarations: the
-manifest's volumes, `backup.conf` (the `mysql` and `sqlite` directives), the addon's
-`backup:` word, the compose project, and each service's health test.
-
-What to build: verbs that run them, so a timer's `run:` is a jcloud command and not a
-script the platform has to carry: `jcloud backup` (restic, the same `BACKUP_*` keys the
-cloud's `.env` has, a dump for each `mysql` volume), `jcloud restore-test` (newest
-snapshot into a throwaway project, health test, cleanup) and `jcloud healthwatch` (the
-`HEALTH_GRACE_SECONDS` rule and `ALERT_WEBHOOK_URL`). Each reads the layout through
-`Profile`, so Japode's tree and a site's `jcloud/` folder are one code path.
-
-Open choice: whether Japode/cloud moves its own timers to these verbs in the same line
-or keeps its bash until a later one.
