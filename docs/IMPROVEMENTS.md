@@ -92,3 +92,29 @@ Anything that adoption has to work around is filed here as its own line, the way
 was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
+
+### §JCT47 A timer that runs a jcloud verb
+
+Found writing v0.8.0's release notes. JCT43 made `run:` a bash script under the root:
+host apply writes `ExecStart=/usr/bin/env bash <root>/<script>`, checks the script is
+there, and export refuses a timer whose script no `carry:` path covers. So `run: jcloud
+backup` becomes `bash <root>/jcloud backup`, and the only way to reach the verbs JCT46
+added is a one-line script (`exec jcloud backup --root …`) kept under a carried
+directory, which is exactly the bash fespsp-institucional's `jcloud/` folder (FI194) is
+meant not to hold.
+
+What to build: a `run:` or `stop_post:` whose first word is `jcloud` names a verb, not a
+script. Host apply writes `ExecStart=<jcloud> <verb> --root <root> <args>`, with
+`<jcloud>` the absolute path of the binary running host apply, so the unit runs the
+build that wrote it and the next apply after an upgrade rewrites it. No script is
+checked for, export needs no `carry:` for it, and validate accepts only the verbs a
+timer can run (backup, restore-test, healthwatch) and refuses `--root` in the args,
+which host apply supplies.
+
+A timer's `env:` still matters: the verbs read BACKUP_* and ALERT_WEBHOOK_URL from
+`.env`, and export carries those keys sealed.
+
+Done when Japode's three timers can be declared as `run: jcloud backup`, `run: jcloud
+restore-test --wait-timeout 420` with `stop_post: jcloud restore-test --cleanup`, and
+`run: jcloud healthwatch`, host apply writes their units, and an export of that tree
+needs no `carry:`.
