@@ -92,26 +92,3 @@ Anything that adoption has to work around is filed here as its own line, the way
 was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
-
-### §JCT45 Install into a target with its own layout
-
-Filed from fespsp-institucional (FI194, 2026-11-18). `planInstall` reads the archive's
-`jcloud.yml` and lays every member at the path the source's layout gave it. A service
-file already on the target is accepted only byte-identical; anything else is "already
-here, and install never overwrites".
-
-That fits a move between two Japode-shaped platforms. It does not fit the move FI194
-needs: the target is the site's own repository checked out on the new server, whose
-`jcloud.yml` (JCT44) puts the manifest at the repository root and the compose file,
-route and `backup.conf` under `jcloud/`. Install would lay a second copy of each at the
-cloud's paths, or refuse the ones the repository already declares differently.
-
-What to build: when the target root carries its own `jcloud.yml`, install maps each
-service member from the source's layout to the target's (manifest, service dir, route,
-addon, pin file), lays nothing the target already declares, and compares the declared
-files against the archive's, reporting a difference instead of refusing it: the
-repository is the newer statement of the service. Volumes, dumps, `.env`, pins and
-certificates are unchanged.
-
-Done when the fespsp-institucional export from the cloud installs into that repository's
-`jcloud/` and `agree` passes on the result.

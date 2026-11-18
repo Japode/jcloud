@@ -40,6 +40,13 @@
 // install says so. Shipping images inside the archive (`docker save`) is not done:
 // nothing in this move needs a host with no registry access at all.
 //
+// A target that carries its own jcloud.yml (JCT45), such as a site's repository
+// with a jcloud/ folder, is installed into its own layout: each of the service's
+// files goes where that layout puts it, one it already holds is kept and a
+// difference from the archive reported, never refused, and its host: and edge
+// compose file are the ones that hold. Without one, every file goes where the
+// source kept it.
+//
 // Before all of it, when the archive's jcloud.yml declares host:, `host apply`
 // prepares the machine (JCT38, host_apply.go), so an empty server needs this
 // command and nothing else. The timers it installs wait for the end, once the
@@ -115,6 +122,11 @@ type installPlan struct {
 	edgeName   string
 	edgeExists bool
 	identity   string
+	// The source's layout, which says what each member is; prof is the target's
+	// when the target carries its own jcloud.yml (mapped, JCT45), and where each
+	// member goes.
+	src    *Profile
+	mapped bool
 }
 
 // planInstall reads the archive and the target and decides what to write, or
@@ -131,18 +143,27 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 	}
 	p := &installPlan{idx: idx, write: map[string][]byte{}, env: map[string]string{}}
 
-	// The source's layout, which is where its files go.
-	p.prof = DefaultProfile()
+	// The source's layout, which says what each member is.
+	p.src = DefaultProfile()
 	if data, ok := files[ProfileFile]; ok {
-		if p.prof, err = ParseProfile(data); err != nil {
+		if p.src, err = ParseProfile(data); err != nil {
 			return nil, []string{err.Error()}
 		}
+	}
+	// And where it goes: the target's own layout when it has one (JCT45), such
+	// as a site's repository with a jcloud/ folder; otherwise the source's.
+	p.prof = p.src
+	if _, err := os.Stat(filepath.Join(root, ProfileFile)); err == nil {
+		if p.prof, err = LoadProfile(root); err != nil {
+			return nil, []string{"the target's " + err.Error()}
+		}
+		p.mapped = true
 	}
 	// The index names the member holding the manifest (JCT44); an archive from
 	// before it is read at the path the layout gives.
 	at := idx.Manifest
 	if at == "" {
-		at = filepath.ToSlash(p.prof.ManifestPath(idx.Service))
+		at = filepath.ToSlash(p.src.ManifestPath(idx.Service))
 	}
 	manifest, ok := files[at]
 	if !ok {
@@ -151,7 +172,13 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 	if p.m, err = Parse(manifest); err != nil {
 		return nil, []string{err.Error()}
 	}
-	if p.project, p.edge, err = composeTop(files["docker-compose.yml"]); err != nil {
+	// The project name the volumes are created under is the edge compose file's
+	// that will run them: the target's own when it has one.
+	top := files["docker-compose.yml"]
+	if own, err := os.ReadFile(filepath.Join(root, "docker-compose.yml")); err == nil && p.mapped {
+		top = own
+	}
+	if p.project, p.edge, err = composeTop(top); err != nil {
 		return nil, []string{err.Error()}
 	}
 
@@ -168,7 +195,7 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 			p.notes = append(p.notes, fmt.Sprintf("needs[%s] is %s, the platform's, which the target has to run already", n.Name, n.Shared))
 			continue
 		}
-		at := filepath.ToSlash(p.prof.AddonFile(n.Type))
+		at := filepath.ToSlash(p.src.AddonFile(n.Type))
 		a, err := ParseAddon(files[at])
 		if err != nil {
 			bad("%s: %v", at, err)
@@ -215,10 +242,19 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 			bad("%s: the source had no value for it, and the target's .env does not set it", k)
 		}
 	}
+	// The compose files compose will run: what the plan lays, or what the target
+	// already holds where it keeps them.
 	svcCompose := filepath.ToSlash(filepath.Join(p.prof.ServiceDir(p.m.Name), "docker-compose.yml"))
 	seen := map[string]bool{}
 	for _, at := range []string{"docker-compose.yml", svcCompose} {
-		for _, match := range requiredRE.FindAllStringSubmatch(string(files[at]), -1) {
+		body, planned := p.write[at]
+		if !planned {
+			body, _ = os.ReadFile(filepath.Join(root, filepath.FromSlash(at)))
+		}
+		if body == nil {
+			body = files[at]
+		}
+		for _, match := range requiredRE.FindAllStringSubmatch(string(body), -1) {
 			if k := match[1]; !set(k) && !seen[k] {
 				seen[k] = true
 				bad("%s: requires %s, and neither the target's .env nor the archive sets it", at, k)
@@ -292,19 +328,22 @@ func (p *installPlan) planFiles(root string, files map[string][]byte, bad func(s
 		if strings.HasPrefix(member.Path, "data/") || member.Path == p.idx.Env {
 			continue
 		}
-		// A manifest the source kept outside its root has no place under this one
-		// (JCT44); it is read, never laid down, and the target keeps its own.
-		if member.Path == ExportManifestMember {
-			p.notes = append(p.notes, fmt.Sprintf("the manifest sat at %s, outside the source's root, and was not laid down here", filepath.ToSlash(p.prof.Manifest)))
+		dest, own := p.mapMember(member.Path)
+		switch {
+		case dest == "":
+			continue
+		case own:
+			p.planOwn(root, member.Path, dest, files[member.Path], bad)
 			continue
 		}
 		data := files[member.Path]
-		existing, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(member.Path)))
+		existing, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dest)))
 		exists := err == nil
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
-			bad("%s: %v", member.Path, unwrapPath(err))
+			bad("%s: %v", dest, unwrapPath(err))
 			continue
 		}
+		member.Path = dest
 		switch {
 		case member.Partial:
 			merged, err := mergeLines(string(existing), string(data))
@@ -331,6 +370,66 @@ func (p *installPlan) planFiles(root string, files map[string][]byte, bad func(s
 		}
 	}
 	return pins
+}
+
+// mapMember says where an archive member goes on the target, "" for nowhere, and
+// whether it is one of the service's own files that a target with its own layout
+// declares (JCT45). Without one, everything goes where the source kept it, and a
+// manifest the source kept outside its root (JCT44) goes nowhere.
+func (p *installPlan) mapMember(rel string) (dest string, own bool) {
+	n := p.m.Name
+	src := p.src
+	if !p.mapped {
+		if rel == ExportManifestMember {
+			p.notes = append(p.notes, fmt.Sprintf("the manifest sat at %s, outside the source's root, and was not laid down here", filepath.ToSlash(src.Manifest)))
+			return "", false
+		}
+		return rel, false
+	}
+	slash := func(s string) string { return filepath.ToSlash(filepath.Clean(s)) }
+	manifest := p.idx.Manifest
+	if manifest == "" {
+		manifest = slash(src.ManifestPath(n))
+	}
+	switch {
+	case rel == manifest:
+		return slash(p.prof.ManifestPath(n)), true
+	case rel == ProfileFile:
+		return "", false // the target's own layout is the one that holds
+	case src.RouteKind == "caddy" && rel == slash(src.RouteFile(n)):
+		return slash(p.prof.RouteFile(n)), true
+	case rel == slash(src.PinFile):
+		return slash(p.prof.PinFile), false
+	}
+	for _, need := range p.m.Needs {
+		if rel == slash(src.AddonFile(need.Type)) {
+			return slash(p.prof.AddonFile(need.Type)), false
+		}
+	}
+	if dir := slash(src.ServiceDir(n)); dir != "." && strings.HasPrefix(rel, dir+"/") {
+		return slash(filepath.Join(p.prof.ServiceDir(n), strings.TrimPrefix(rel, dir+"/"))), true
+	}
+	return rel, false
+}
+
+// planOwn decides one of the service's own files on a target with its own layout
+// (JCT45): laid where that layout puts it when absent, and when present kept, with
+// a difference from the archive reported rather than refused, since the target's
+// repository is the newer statement of the service. Install never writes outside
+// the root, so a file the layout puts there has to be there already.
+func (p *installPlan) planOwn(root, rel, dest string, data []byte, bad func(string, ...any)) {
+	existing, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(dest)))
+	switch {
+	case err == nil && bytes.Equal(existing, data):
+	case err == nil:
+		p.notes = append(p.notes, fmt.Sprintf("%s differs from the source's %s; the target's is kept", dest, rel))
+	case !errors.Is(err, fs.ErrNotExist):
+		bad("%s: %v", dest, unwrapPath(err))
+	case !inRoot(dest):
+		bad("%s: the target's jcloud.yml puts it there, outside the root, and it is not there", dest)
+	default:
+		p.write[dest] = data
+	}
 }
 
 // planEnv merges the sealed configuration into the target's .env: the target's
@@ -396,6 +495,20 @@ func archiveHost(archive string) (Host, error) {
 		return Host{}, err
 	}
 	return prof.Host, nil
+}
+
+// installHost is the host: install prepares: the target's own when it carries a
+// jcloud.yml (JCT45), since that is the statement of the server it is on, and the
+// archive's otherwise.
+func installHost(archive, root string) (Host, error) {
+	if _, err := os.Stat(filepath.Join(root, ProfileFile)); err == nil {
+		prof, err := LoadProfile(root)
+		if err != nil {
+			return Host{}, fmt.Errorf("the target's %w", err)
+		}
+		return prof.Host, nil
+	}
+	return archiveHost(archive)
 }
 
 // mergeLines adds the archive's KEY=value lines to the target's, refusing a key
@@ -831,7 +944,7 @@ func runInstall(archive, root, identity string, wait int, login registryLogin, r
 	// there before anything below can ask it (JCT38).
 	// Its timers wait for the end: the scripts they run are not laid down yet
 	// (JCT43).
-	h, err := archiveHost(archive)
+	h, err := installHost(archive, root)
 	if err != nil {
 		return refuse("nothing was written", []string{err.Error()})
 	}

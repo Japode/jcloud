@@ -135,7 +135,10 @@ name its manifest by one literal path with no `{name}`, for example
 `manifest: ../japode.yml`. The service's name is then read from the manifest's `name:`.
 That literal path is the only one that may leave the root, and when it does,
 `service_dir:` has to say where the compose file and `backup.conf` sit inside it.
-`export` carries such a manifest as `jcloud-manifest.yml`.
+`export` carries such a manifest as `jcloud-manifest.yml`. `install` into a root that has its
+own `jcloud.yml` puts each of the service's files where that layout says. A file the
+target already declares is kept, and a difference from the archive is reported, never
+refused. The target's `host:` and its edge compose file are the ones used.
 
 jcloud refuses a misspelt key or a path outside the root rather than falling back to the
 default. It reads this file and never generates one.

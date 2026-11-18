@@ -15,8 +15,6 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT45** (deps: JCT44 ✅) **install lays the source's layout into the target, and refuses a target that keeps the service's files elsewhere** — A service moved into its own repository's jcloud/ is laid out the way that repository says, not the way the platform it left did. → §JCT45
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
