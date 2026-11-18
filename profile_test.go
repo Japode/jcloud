@@ -107,8 +107,13 @@ addon: addons/addon.yml
 	if _, err := ParseProfile([]byte("manifests: x/{name}.yml\n")); err == nil || !strings.Contains(err.Error(), "manifests") {
 		t.Errorf("a misspelt key should be refused by name, got %v", err)
 	}
-	if _, err := ParseProfile([]byte("manifest: services/japode.yml\n")); err == nil || !strings.Contains(err.Error(), "exactly once") {
-		t.Errorf("a manifest path without {name} should be refused, got %v", err)
+	// A path without {name} is a single manifest since JCT44, and accepted; a
+	// template still names {name} exactly once.
+	if _, err := ParseProfile([]byte("manifest: services/japode.yml\n")); err != nil {
+		t.Errorf("a single manifest should be accepted (JCT44), got %v", err)
+	}
+	if _, err := ParseProfile([]byte("manifest: services/{name}/{name}.yml\n")); err == nil || !strings.Contains(err.Error(), "exactly once") {
+		t.Errorf("a template naming {name} twice should be refused, got %v", err)
 	}
 }
 

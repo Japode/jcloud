@@ -26,7 +26,9 @@
 // is carried with this service's lines only and marked partial for the same reason.
 //
 // Nothing outside the root is read, as everywhere else: a bind mount the edge's
-// compose file points outside the tree, or a symlink, is not followed.
+// compose file points outside the tree, or a symlink, is not followed. The one
+// exception is a manifest jcloud.yml names outside the root on purpose (JCT44),
+// which travels as jcloud-manifest.yml.
 package main
 
 import (
@@ -58,11 +60,26 @@ const ExportSchema = 1
 // ExportIndex is the name of the description at the archive's root.
 const ExportIndex = "jcloud-export.json"
 
+// ExportManifestMember is where a manifest that sits outside the source's root
+// (JCT44) travels in the archive. It is not laid down at that path.
+const ExportManifestMember = "jcloud-manifest.yml"
+
+// exportManifestMember is the member that holds name's manifest under prof.
+func exportManifestMember(prof *Profile, name string) string {
+	if prof.ManifestOutside() {
+		return ExportManifestMember
+	}
+	return filepath.ToSlash(filepath.Clean(prof.ManifestPath(name)))
+}
+
 // ExportManifest is jcloud-export.json.
 type ExportManifest struct {
-	Schema     int            `json:"schema"`
-	Jcloud     string         `json:"jcloud"`
-	Service    string         `json:"service"`
+	Schema  int    `json:"schema"`
+	Jcloud  string `json:"jcloud"`
+	Service string `json:"service"`
+	// The member holding the manifest (JCT44): its path under the root, or
+	// ExportManifestMember when the source kept it outside.
+	Manifest   string         `json:"manifest,omitempty"`
 	SourceHost string         `json:"source_host"`
 	Created    string         `json:"created"`
 	Files      []ExportMember `json:"files"`
@@ -157,8 +174,15 @@ func ExportSet(root, name string) (files []exportFile, left, problems []string) 
 	// whatever its compose file mounts beside it is part of it, and a list of
 	// expected names would miss the file nobody thought of. Where the template puts
 	// several manifests in one directory, only the files agree reads are taken.
+	// A manifest outside the root (JCT44) cannot be a member at its own path, which
+	// would leave the root the archive is installed under; it travels as
+	// ExportManifestMember, and the index says so.
+	if prof.ManifestOutside() {
+		seen[ExportManifestMember] = true
+		files = append(files, newExportFile(ExportManifestMember, data, false, false))
+	}
 	svcDir := prof.ServiceDir(name)
-	if strings.Contains(path.Dir(prof.Manifest), "{name}") {
+	if prof.OwnsServiceDir() {
 		walkErr := filepath.WalkDir(filepath.Join(root, svcDir), func(p string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -181,7 +205,9 @@ func ExportSet(root, name string) (files []exportFile, left, problems []string) 
 			bad("%s: %v", filepath.ToSlash(svcDir), unwrapPath(walkErr))
 		}
 	} else {
-		add(prof.ManifestPath(name), true, false)
+		if !prof.ManifestOutside() {
+			add(prof.ManifestPath(name), true, false)
+		}
 		add(filepath.Join(svcDir, "backup.conf"), false, false)
 	}
 	add(filepath.Join(svcDir, "docker-compose.yml"), true, false)
@@ -603,9 +629,11 @@ func export(args []string) int {
 		return 1
 	}
 	host, _ := os.Hostname()
+	prof, _ := LoadProfile(root) // ExportSet read it already, without a problem
 	idx := ExportManifest{
 		Schema: ExportSchema, Jcloud: Version(), Service: name, SourceHost: host,
-		Created: time.Now().UTC().Format(time.RFC3339), Left: left,
+		Manifest: exportManifestMember(prof, name),
+		Created:  time.Now().UTC().Format(time.RFC3339), Left: left,
 		Env: ExportEnvMember, EnvMissing: envMissing,
 		Data: data, DataLive: !stop && hasVolume(data), LeftMounts: leftMounts,
 	}

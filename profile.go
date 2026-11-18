@@ -41,7 +41,8 @@ const ProfileFile = "jcloud.yml"
 // resolved: a key jcloud.yml left out holds the Japode value, so nothing
 // downstream asks whether one was given.
 type Profile struct {
-	Manifest        string // where a manifest sits, with {name}
+	Manifest        string // where a manifest sits, with {name}; or one literal path (JCT44)
+	ServiceDirTmpl  string // service_dir: where the compose file sits, with {name}; "" for beside the manifest
 	RoutePath       string // the route source, with {name}
 	RouteKind       string // the grammar that source is written in
 	ContainerPrefix string // what container_name puts in front of the short name
@@ -103,8 +104,9 @@ var backupKinds = []string{"backup-conf", "none"}
 // prefix is a value a platform can mean (containers named by their short name
 // alone), and it must not read as "left out".
 type profileFile struct {
-	Manifest *string `yaml:"manifest"`
-	Route    *struct {
+	Manifest   *string `yaml:"manifest"`
+	ServiceDir *string `yaml:"service_dir"`
+	Route      *struct {
 		Path *string `yaml:"path"`
 		Kind *string `yaml:"kind"`
 	} `yaml:"route"`
@@ -158,6 +160,7 @@ func ParseProfile(data []byte) (*Profile, error) {
 		}
 	}
 	set(&p.Manifest, f.Manifest)
+	set(&p.ServiceDirTmpl, f.ServiceDir)
 	if f.Route != nil {
 		set(&p.RoutePath, f.Route.Path)
 		set(&p.RouteKind, f.Route.Kind)
@@ -205,13 +208,33 @@ func (p *Profile) Validate() []string {
 	// The manifest template is read in both directions: forwards to find one
 	// service's file, backwards to say which service a file found by the glob
 	// belongs to. Both need {name} exactly once and no other wildcard.
-	if relative("manifest", p.Manifest) {
+	//
+	// Or it is one literal path (JCT44): a platform of one service, whose name is
+	// read from the manifest's own name:. Only that shape may leave the root, to
+	// the repository holding a jcloud/ folder, so a typo in an ordinary template
+	// still reads as one; its compose file then sits where service_dir says.
+	switch {
+	case p.singleManifest():
+		switch {
+		case p.Manifest == "":
+			bad("manifest is empty")
+		case filepath.IsAbs(p.Manifest) || path.IsAbs(p.Manifest):
+			bad("manifest is %q, and a path here is relative to the platform root", p.Manifest)
+		case strings.ContainsAny(p.Manifest, "*?["):
+			bad("manifest is %q, and a single manifest is one file, not a pattern", p.Manifest)
+		case p.ServiceDirTmpl == "" && !inRoot(filepath.Dir(p.Manifest)):
+			bad("manifest is %q, outside the root, so service_dir has to say where its compose file and backup.conf sit", p.Manifest)
+		}
+	case relative("manifest", p.Manifest):
 		switch {
 		case strings.Count(p.Manifest, "{name}") != 1:
 			bad("manifest is %q and has to name {name} exactly once", p.Manifest)
 		case strings.ContainsAny(p.Manifest, "*?["):
 			bad("manifest is %q, and {name} is its only wildcard", p.Manifest)
 		}
+	}
+	if p.ServiceDirTmpl != "" {
+		relative("service_dir", p.ServiceDirTmpl)
 	}
 	// A Caddy route is one file per service, read for its {$SVC_HOSTS:…} source.
 	// An nginx edge is usually one configuration for every host, and only its
@@ -246,23 +269,82 @@ func (p *Profile) Validate() []string {
 	return append(out, p.Host.validate()...)
 }
 
-// ManifestPath is where one service's manifest sits, relative to the root.
+// ManifestPath is where one service's manifest sits, relative to the root. A
+// single manifest (JCT44) is that path whatever the name, and may leave the root.
 func (p *Profile) ManifestPath(name string) string {
 	return filepath.FromSlash(strings.ReplaceAll(p.Manifest, "{name}", name))
 }
 
-// ServiceDir is the directory beside a manifest, where its compose file and its
-// backup.conf are read from.
+// singleManifest is whether the manifest is one literal path rather than a
+// template (JCT44): a platform of one service.
+func (p *Profile) singleManifest() bool {
+	return !strings.Contains(p.Manifest, "{name}")
+}
+
+// ManifestOutside is whether the manifest sits outside the root (JCT44).
+func (p *Profile) ManifestOutside() bool {
+	return !inRoot(p.Manifest)
+}
+
+// inRoot is whether a relative path stays under the root.
+func inRoot(rel string) bool {
+	clean := path.Clean(filepath.ToSlash(rel))
+	return clean != ".." && !strings.HasPrefix(clean, "../") && !path.IsAbs(clean)
+}
+
+// ServiceDir is where a service's compose file and its backup.conf are read
+// from: service_dir when the platform names one (JCT44), and otherwise the
+// directory beside its manifest.
 func (p *Profile) ServiceDir(name string) string {
+	if p.ServiceDirTmpl != "" {
+		return filepath.FromSlash(strings.ReplaceAll(p.ServiceDirTmpl, "{name}", name))
+	}
 	return filepath.Dir(p.ManifestPath(name))
+}
+
+// OwnsServiceDir is whether each service has a directory of its own, which
+// export then carries whole: a template with {name} in it, or a single manifest's
+// platform, which has one service.
+func (p *Profile) OwnsServiceDir() bool {
+	// The root itself is never one service's: carrying it whole carries the tree.
+	if path.Clean(filepath.ToSlash(p.ServiceDir(""))) == "." {
+		return false
+	}
+	if p.singleManifest() {
+		return true
+	}
+	if p.ServiceDirTmpl != "" {
+		return strings.Contains(p.ServiceDirTmpl, "{name}")
+	}
+	return strings.Contains(path.Dir(p.Manifest), "{name}")
 }
 
 // Services finds every manifest under root and answers the service each one is,
 // sorted, so a report reads in the same order on every run. The name comes from
 // the template and not from the directory, so a layout that does not put {name}
 // in a directory of its own is read the same way. ManifestPath turns a name back
-// into its file.
+// into its file. A single manifest (JCT44) is read for its own name:, and is no
+// service at all when it is not there.
 func (p *Profile) Services(root string) ([]string, error) {
+	if p.singleManifest() {
+		data, err := os.ReadFile(filepath.Join(root, p.ManifestPath("")))
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		var named struct {
+			Name string `yaml:"name"`
+		}
+		if err := yaml.Unmarshal(data, &named); err != nil {
+			return nil, fmt.Errorf("%s: %w", filepath.ToSlash(p.Manifest), err)
+		}
+		if named.Name == "" {
+			return nil, fmt.Errorf("%s: names no service (name:), and a single manifest is read for its name", filepath.ToSlash(p.Manifest))
+		}
+		return []string{named.Name}, nil
+	}
 	glob := filepath.Join(root, filepath.FromSlash(strings.ReplaceAll(p.Manifest, "{name}", "*")))
 	found, err := filepath.Glob(glob)
 	if err != nil {

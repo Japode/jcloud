@@ -82,6 +82,7 @@ at its root saying where they are. Every key is optional and defaults to the val
 
 ```yaml
 manifest: services/{name}/japode.yml   # compose file and backup.conf sit beside it
+service_dir: services/{name}           # or say where they sit
 route:
   path: caddy/sites/{name}.caddy       # nginx: one file for every host, no {name}
   kind: caddy                          # or nginx
@@ -128,6 +129,13 @@ A manifest names its own keys' prefix with `env_prefix: VIGLET_TURING_` (the def
 its name, upper case, `-` as `_`). A variable with `shared: true` is set by its bare
 name, such as `OPENAI_API_KEY`, and every manifest declaring it has to agree on its
 default and on `secret`.
+
+A platform of one service, such as a site's own repository with a `jcloud/` folder, can
+name its manifest by one literal path with no `{name}`, for example
+`manifest: ../japode.yml`. The service's name is then read from the manifest's `name:`.
+That literal path is the only one that may leave the root, and when it does,
+`service_dir:` has to say where the compose file and `backup.conf` sit inside it.
+`export` carries such a manifest as `jcloud-manifest.yml`.
 
 jcloud refuses a misspelt key or a path outside the root rather than falling back to the
 default. It reads this file and never generates one.

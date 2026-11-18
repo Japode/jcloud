@@ -93,28 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT44 A manifest outside the platform root
-
-Filed from fespsp-institucional (FI194, 2026-11-18). That site leaves Japode/cloud for a
-server of its own, and its owner decided the server's declaration lives in the site's
-repository, in a `jcloud/` folder, with `jcloud.yml`'s `manifest:` pointing at the
-`japode.yml` the repository already keeps at its root. That removes the second copy the
-cloud compared on every CI run.
-
-`Profile.Validate` refuses both halves of that: `../japode.yml` leaves the platform
-root, and a fixed path has no `{name}`, which the template needs exactly once so
-`Services` can read a found file back into a service name.
-
-What to build: let a profile name one service's manifest by a literal path, `{name}`
-taken from the manifest's own `name:` instead of the path, and let that one path climb
-out of the root to the repository that holds the folder. Everything else keeps the root
-rule: the compose file, `backup.conf` and the route are still read from inside it, so
-`ServiceDir` stops being "the directory beside the manifest" for this shape and becomes
-a key of its own (`service_dir:`, defaulting to the manifest's directory).
-
-Open choice: whether climbing out needs an explicit opt-in key, so a typo in an ordinary
-platform's `manifest:` still reads as one.
-
 ### §JCT45 Install into a target with its own layout
 
 Filed from fespsp-institucional (FI194, 2026-11-18). `planInstall` reads the archive's

@@ -138,7 +138,13 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 			return nil, []string{err.Error()}
 		}
 	}
-	manifest, ok := files[filepath.ToSlash(p.prof.ManifestPath(idx.Service))]
+	// The index names the member holding the manifest (JCT44); an archive from
+	// before it is read at the path the layout gives.
+	at := idx.Manifest
+	if at == "" {
+		at = filepath.ToSlash(p.prof.ManifestPath(idx.Service))
+	}
+	manifest, ok := files[at]
 	if !ok {
 		return nil, []string{"the archive carries no manifest for " + idx.Service}
 	}
@@ -284,6 +290,12 @@ func (p *installPlan) planFiles(root string, files map[string][]byte, bad func(s
 	pins := map[string]string{}
 	for _, member := range p.idx.Files {
 		if strings.HasPrefix(member.Path, "data/") || member.Path == p.idx.Env {
+			continue
+		}
+		// A manifest the source kept outside its root has no place under this one
+		// (JCT44); it is read, never laid down, and the target keeps its own.
+		if member.Path == ExportManifestMember {
+			p.notes = append(p.notes, fmt.Sprintf("the manifest sat at %s, outside the source's root, and was not laid down here", filepath.ToSlash(p.prof.Manifest)))
 			continue
 		}
 		data := files[member.Path]

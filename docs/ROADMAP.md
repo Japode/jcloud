@@ -15,8 +15,7 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT44** (deps: —) **jcloud.yml cannot name a manifest outside the platform root, or one whose path carries no {name}** — A service that is its own platform keeps japode.yml at its repository root, and a jcloud/ folder beside it cannot point at that file. → §JCT44
-- 📋 **JCT45** (deps: JCT44) **install lays the source's layout into the target, and refuses a target that keeps the service's files elsewhere** — A service moved into its own repository's jcloud/ is laid out the way that repository says, not the way the platform it left did. → §JCT45
+- 📋 **JCT45** (deps: JCT44 ✅) **install lays the source's layout into the target, and refuses a target that keeps the service's files elsewhere** — A service moved into its own repository's jcloud/ is laid out the way that repository says, not the way the platform it left did. → §JCT45
 
 ## Done when — Block B
 
