@@ -158,6 +158,10 @@ func main() {
 		os.Exit(restoreTestCmd(args[1:]))
 	case "healthwatch":
 		os.Exit(healthwatchCmd(args[1:]))
+	case "deploy":
+		// The deploy as a verb (JCT49), for a platform whose server is its own
+		// jcloud/ folder: pin, pull, wait, roll back, reload the edge.
+		os.Exit(deployCmd(args[1:]))
 	case "version", "--version":
 		// The compiler is printed beside the tool's own version because it is the
 		// other half of what determines this binary's behaviour, and a report about
@@ -251,6 +255,11 @@ func usage() {
   jcloud healthwatch [--root <dir>]    say when a service goes down or comes
                                        back, after HEALTH_GRACE_SECONDS, to
                                        stdout and ALERT_WEBHOOK_URL
+  jcloud deploy [<service> …]          pin --image (a digest) for one service,
+       [--image <ref@sha256:…>]        check the configuration, pull, bring the
+       [--root <dir>]                  stack up and wait on its healthchecks,
+       [--wait-timeout <seconds>]      roll back to the previous digests when a
+       [--first-boot <seconds>]        container is unwell, reload the edge
   jcloud version                    this build, and the schema version
 
 Every problem is reported at once: a manifest is written in one sitting, and a

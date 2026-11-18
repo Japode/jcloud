@@ -11,7 +11,8 @@ server and starts the service; and `host apply`, which prepares an empty server 
 so a timer runs a jcloud command instead of a script the platform has to carry: `backup`
 to a restic repository, `restore-test`, which restores the newest snapshot and starts
 it, and `healthwatch`, which posts to the platform's webhook when a service goes down
-or comes back.
+or comes back. And `deploy` brings a service up at the digest its CI published, and
+returns to the previous digest when it does not come up healthy.
 
 The product page, with a real run of every verb, is at https://japode.com/jcloud/ (built
 from [`site/`](site/README.md)).
@@ -79,6 +80,13 @@ jcloud restore-test [--root <dir>]              restore the newest snapshot into
 jcloud healthwatch [--root <dir>]               say when a service goes down or
                                                 comes back, to stdout and to
                                                 ALERT_WEBHOOK_URL
+jcloud deploy [<service> …] [--root <dir>]      pin --image (a digest), check the
+      [--image <ref@sha256:…>]                  configuration, pull, bring the
+      [--wait-timeout <s>] [--first-boot <s>]   stack up, roll back to the previous
+                                                digests when a container is
+                                                unwell, reload the edge; set
+                                                `deploy: jcloud deploy {name}
+                                                --image {image}` for `up` to print it
 jcloud version
 ```
 

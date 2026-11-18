@@ -92,25 +92,3 @@ Anything that adoption has to work around is filed here as its own line, the way
 was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
-
-### §JCT49 A deploy verb
-
-Filed from fespsp-institucional (FI194, 2026-11-18). That site's `jcloud/` folder now
-declares its server whole, timers included (FI195, JCT47), and the one job still only
-bash is the deploy. Japode/cloud's `scripts/deploy.sh` does what a push to main needs:
-refuse an image that is not a digest, pin it in the pin file, `compose config` and
-`caddy validate`, record the running digest, pull, `up -d --remove-orphans --wait` under
-the wait budget (a longer one on a first boot), triage an expired wait instead of
-rolling back on it, roll back to the recorded digest when a container is unwell, reload
-Caddy, prune dangling images. It walks `services/*/` and spells `japode-`, so it reads
-nothing in a site's own folder. The `deploy:` key `up` prints is a template, not a run.
-
-What to build: `jcloud deploy <service> --image <ref@sha256:…> [--root <dir>]`, that
-script ported rule for rule through the Profile, as JCT46 ported the jobs: the compose
-files from `service_dir`, the edge from the root, the pin file and image variable from
-the layout, the first-boot budget a flag. A site's workflow then runs one command on its
-self-hosted runner.
-
-Open choice, the owner's: the README says jcloud deploys nothing but a moved service,
-and the jobs widened that. A deploy verb widens it again; the alternative is the site
-keeping its own short deploy script, the bash its `jcloud/` folder exists not to hold.
