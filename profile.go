@@ -72,6 +72,11 @@ type Profile struct {
 	// What the machine itself must be (JCT23, host.go): timers, path modes, a
 	// firewall. Empty on Japode's default, which asserts nothing about the host.
 	Host Host
+
+	// Paths under the root, files or directories, that `export` carries beside a
+	// service's own files (JCT43): the scripts the host's timers run, and whatever
+	// those scripts read from the tree.
+	Carry []string
 }
 
 // DefaultProfile is the Japode platform's layout, and what a root with no
@@ -112,6 +117,7 @@ type profileFile struct {
 	Builds          *bool     `yaml:"builds"`
 	EnvExample      *string   `yaml:"env_example"`
 	Host            *hostFile `yaml:"host"`
+	Carry           []string  `yaml:"carry"`
 }
 
 // routeKinds is every route grammar this build can read: Caddy through `caddy
@@ -169,6 +175,7 @@ func ParseProfile(data []byte) (*Profile, error) {
 	if f.Host != nil {
 		p.Host = f.Host.host()
 	}
+	p.Carry = f.Carry
 
 	if problems := p.Validate(); len(problems) > 0 {
 		return nil, fmt.Errorf("%s: %s", ProfileFile, strings.Join(problems, "; "))
@@ -232,6 +239,9 @@ func (p *Profile) Validate() []string {
 	}
 	if relative("addon", p.Addon) && !strings.Contains(p.Addon, "{type}") {
 		bad("addon is %q and does not name {type}, so every need would read one provider", p.Addon)
+	}
+	for _, c := range p.Carry {
+		relative("carry", c)
 	}
 	return append(out, p.Host.validate()...)
 }

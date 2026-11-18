@@ -94,10 +94,17 @@ backup: backup-conf                    # or none: no backup.conf compared, and
                                        # each sqlite file or database named
 builds: false                          # true: a manifest may say build: <Dockerfile>
 env_example: .env.example              # the template agree holds every key to
+carry: [scripts]                       # more of the tree export takes along
 host:                                  # absent: nothing about the host is asserted
   timers:                              # each <unit>.timer must be active and
     - japode-healthwatch               # its unit's last run must have succeeded
     - {name: japode-backup, max_age: 7h}  # and finished within max_age
+    - name: japode-restore-test        # with run: and on:, host apply writes
+      run: scripts/restore-test.sh     #   its units and enables it; the script
+      on: "Sun *-*-* 04:40:00"         #   must sit under a carry: path
+      stop_post: scripts/restore-test.sh --cleanup  # also: timeout, jitter,
+      env: [BACKUP_PASSWORD]           #   accuracy, persistent, success_exit,
+                                       #   description; env keys travel sealed
   paths:
     - path: .                          # relative to the root, or absolute
       mode: "750"

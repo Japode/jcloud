@@ -22,6 +22,8 @@
 //     must be among the rules before ufw is enabled, never after: enabling it over
 //     SSH without one locks the machine away from the person running this, which is
 //     why the bootstrap script only ever advised. Missing, the enable is refused.
+//  6. Each timer that says what it runs: its units written and the timer enabled
+//     (JCT43, host_timers.go).
 //
 // Then it runs the observation survey would and prints whatever still differs, and
 // exits 1 if anything does.
@@ -62,7 +64,7 @@ var sshRules = []string{"OpenSSH", "22", "22/tcp", "ssh"}
 
 // declaresSetup is whether h asks anything of the machine host apply can make.
 func (h Host) declaresSetup() bool {
-	return h.User != nil || len(h.Paths) > 0 || h.Firewall != "" || len(h.Sysctl) > 0 || len(h.Requires) > 0
+	return h.User != nil || len(h.Paths) > 0 || h.Firewall != "" || len(h.Sysctl) > 0 || len(h.Requires) > 0 || h.installsTimers()
 }
 
 // hostApplier carries one run: what it did, and the first thing that stopped it.
@@ -349,15 +351,18 @@ func HostApply(root string, h Host, run commandRunner) (did []string, still []Di
 		{"paths", func() error { return a.paths(h.Paths) }},
 		{"sysctl", func() error { return a.sysctl(h.Sysctl) }},
 		{"firewall", func() error { return a.firewall(h) }},
+		{"timers", func() error { return a.timers(h) }},
 	}
 	for _, s := range steps {
 		if err := s.fn(); err != nil {
 			return a.did, nil, fmt.Errorf("%s: %w", s.name, err)
 		}
 	}
-	// What this made, asked back the way survey asks it; the timers, disks and
-	// certificates are survey's alone and nothing here makes them.
-	made := Host{Paths: h.Paths, Firewall: h.Firewall, User: h.User, FirewallAllow: h.FirewallAllow, Sysctl: h.Sysctl, Requires: h.Requires}
+	// What this made, asked back the way survey asks it. The disks, the
+	// certificates and every timer it does not install are survey's alone, and the
+	// ones it installs are held to running, not to an age they cannot have yet.
+	made := Host{Paths: h.Paths, Firewall: h.Firewall, User: h.User, FirewallAllow: h.FirewallAllow, Sysctl: h.Sysctl, Requires: h.Requires,
+		Timers: h.installedTimers()}
 	o := ParseObserved(strings.Join(observeHost(root, made, run), "\n"))
 	still = surveyHost(made, o)
 	sort.SliceStable(still, func(i, j int) bool { return still[i].Key() < still[j].Key() })

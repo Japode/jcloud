@@ -73,9 +73,25 @@ type Host struct {
 //
 // It reads timestamps and nothing else. It never opens what the job wrote, so it
 // says a backup is recent, not that it restores; that stays the restore test's job.
+//
+// A timer that also says what it runs and when (JCT43, host_timers.go) is one host
+// apply installs; one that does not stays survey's alone.
 type HostTimer struct {
 	Name   string
 	MaxAge string // a Go duration as written, "" for none; validate refuses a bad one
+
+	// What host apply writes the units from (JCT43). Run and StopPost are a bash
+	// script under the root and its arguments; the durations are Go durations.
+	Run         string
+	On          string
+	Timeout     string
+	Jitter      string
+	Accuracy    string
+	Persistent  bool
+	SuccessExit []int
+	StopPost    string
+	Description string
+	Env         []string
 }
 
 func (t *HostTimer) UnmarshalYAML(n *yaml.Node) error {
@@ -84,18 +100,43 @@ func (t *HostTimer) UnmarshalYAML(n *yaml.Node) error {
 		return nil
 	}
 	if n.Kind != yaml.MappingNode {
-		return fmt.Errorf("line %d: a timer is a name or {name, max_age}", n.Line)
+		return fmt.Errorf("line %d: a timer is a name or {name, max_age, run, on, …}", n.Line)
 	}
 	for i := 0; i+1 < len(n.Content); i += 2 {
-		switch key, value := n.Content[i].Value, n.Content[i+1].Value; key {
+		key, node := n.Content[i].Value, n.Content[i+1]
+		var err error
+		switch key {
 		case "name":
-			t.Name = value
+			t.Name = node.Value
 		case "max_age":
-			t.MaxAge = value
+			t.MaxAge = node.Value
+		case "run":
+			t.Run = node.Value
+		case "on":
+			t.On = node.Value
+		case "timeout":
+			t.Timeout = node.Value
+		case "jitter":
+			t.Jitter = node.Value
+		case "accuracy":
+			t.Accuracy = node.Value
+		case "persistent":
+			err = node.Decode(&t.Persistent)
+		case "success_exit":
+			err = node.Decode(&t.SuccessExit)
+		case "stop_post":
+			t.StopPost = node.Value
+		case "description":
+			t.Description = node.Value
+		case "env":
+			err = node.Decode(&t.Env)
 		default:
 			// Refused for KnownFields' reason, which does not reach a node decoded
 			// by hand: a misspelt max_age would leave the age unasserted.
 			return fmt.Errorf("line %d: field %s not found in a timer", n.Content[i].Line, key)
+		}
+		if err != nil {
+			return fmt.Errorf("line %d: %s: %w", node.Line, key, err)
 		}
 	}
 	return nil
@@ -150,6 +191,7 @@ func (h Host) validate() []string {
 		if d, err := time.ParseDuration(t.MaxAge); t.MaxAge != "" && (err != nil || d <= 0) {
 			bad("host.timers: %s has max_age %q, and an age is a positive duration such as 26h", t.Name, t.MaxAge)
 		}
+		t.validateUnit(bad)
 	}
 	for _, p := range h.Paths {
 		switch {

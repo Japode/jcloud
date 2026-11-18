@@ -65,6 +65,12 @@ func exportEnvKeys(root string, prof *Profile, m *Manifest) []exportEnvKey {
 		}
 		add(exportEnvKey{m.EnvKey(e), e.Default != nil})
 	}
+	// The keys the host's timers read beside the service's (JCT43): where its
+	// backups go, where its watch alerts. Without them a timer install wrote fails
+	// at its first run.
+	for _, k := range prof.Host.timerEnv() {
+		add(exportEnvKey{k, false})
+	}
 	// Only a Caddy route is the service's own and reads the environment; an nginx
 	// edge states its hosts in server_name.
 	if prof.RouteKind == "caddy" {

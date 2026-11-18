@@ -205,6 +205,43 @@ func ExportSet(root, name string) (files []exportFile, left, problems []string) 
 	}
 	add(ProfileFile, false, true)
 
+	// What the platform asks to carry (JCT43): the scripts its timers run, whole
+	// directories at a time, since a script sources neighbours nothing here follows.
+	for _, c := range prof.Carry {
+		c = path.Clean(filepath.ToSlash(c))
+		info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(c)))
+		switch {
+		case err != nil:
+			bad("jcloud.yml carry: %s: %v", c, unwrapPath(err))
+		case info.IsDir():
+			walkErr := filepath.WalkDir(filepath.Join(root, filepath.FromSlash(c)), func(p string, d fs.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
+				rel, err := filepath.Rel(root, p)
+				if err != nil {
+					return err
+				}
+				if isEnvFile(d.Name()) {
+					left = append(left, filepath.ToSlash(rel))
+					return nil
+				}
+				add(rel, false, true)
+				return nil
+			})
+			if walkErr != nil {
+				bad("jcloud.yml carry: %s: %v", c, unwrapPath(walkErr))
+			}
+		default:
+			add(c, true, true)
+		}
+	}
+	for _, s := range prof.Host.timerScripts() {
+		if !carried(prof.Carry, s) {
+			bad("jcloud.yml: host.timers runs %s, and no carry: path covers it, so the target would get a timer with no script", s)
+		}
+	}
+
 	// The pin, so the target pulls the digest the source runs. Only this service's
 	// lines: the rest of the file is other services' state.
 	if m.Build == "" {
@@ -219,6 +256,17 @@ func ExportSet(root, name string) (files []exportFile, left, problems []string) 
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	sort.Strings(left)
 	return files, left, problems
+}
+
+// carried is whether a root-relative path sits under one of the carry: paths.
+func carried(carry []string, rel string) bool {
+	for _, c := range carry {
+		c = path.Clean(filepath.ToSlash(c))
+		if c == "." || rel == c || strings.HasPrefix(rel, c+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // hasVolume is whether any of the state is a volume copy, the one kind --stop

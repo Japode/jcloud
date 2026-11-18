@@ -15,8 +15,6 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT43** (deps: —) **A server built by install backs nothing up and runs no health watch: its timers come from a script it lacks** — A moved site that serves fine and keeps no backup looks exactly like one that does, until the day it is needed. → §JCT43
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and

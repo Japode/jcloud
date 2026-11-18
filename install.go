@@ -42,7 +42,8 @@
 //
 // Before all of it, when the archive's jcloud.yml declares host:, `host apply`
 // prepares the machine (JCT38, host_apply.go), so an empty server needs this
-// command and nothing else.
+// command and nothing else. The timers it installs wait for the end, once the
+// scripts they run are laid down and the service is up (JCT43).
 package main
 
 import (
@@ -816,11 +817,15 @@ func runInstall(archive, root, identity string, wait int, login registryLogin, r
 	}
 	// The host first, when the archive's platform declares one: docker has to be
 	// there before anything below can ask it (JCT38).
-	if h, err := archiveHost(archive); err != nil {
+	// Its timers wait for the end: the scripts they run are not laid down yet
+	// (JCT43).
+	h, err := archiveHost(archive)
+	if err != nil {
 		return refuse("nothing was written", []string{err.Error()})
-	} else if h.declaresSetup() {
+	}
+	if first := h.withoutInstalls(); first.declaresSetup() {
 		fmt.Printf("  preparing the host from jcloud.yml's host:\n")
-		if code := applyHostReport(root, h, hostRun); code != 0 {
+		if code := applyHostReport(root, first, hostRun); code != 0 {
 			return refuse("the host is not what jcloud.yml declares, so nothing else was done", nil)
 		}
 	}
@@ -849,6 +854,14 @@ func runInstall(archive, root, identity string, wait int, login registryLogin, r
 	}
 	if len(problems) > 0 {
 		return refuse(p.idx.Service+" did not come back whole", problems)
+	}
+	// The timers last, once the tree they run in is laid down and the service is
+	// up, so the first run finds both (JCT43).
+	if h.installsTimers() {
+		fmt.Printf("  installing the timers jcloud.yml's host: declares\n")
+		if code := applyHostReport(root, h, hostRun); code != 0 {
+			return refuse(p.idx.Service+" is up, and its timers are not what jcloud.yml declares", nil)
+		}
 	}
 	for _, n := range p.notes {
 		fmt.Printf("      \033[33m!\033[0m %s\n", n)
