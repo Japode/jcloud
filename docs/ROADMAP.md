@@ -15,6 +15,8 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
+- 📋 **JCT50** (deps: —) **install runs as root and leaves .env and every file it lays owned by root, so the deploy user can't read or replace them** — The timers run as host.user and the site's deploy job rewrites .env as it, so a fresh install fails both until someone chowns the tree by hand. → §JCT50
+
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
