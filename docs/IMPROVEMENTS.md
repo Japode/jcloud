@@ -118,3 +118,26 @@ Done when Japode's three timers can be declared as `run: jcloud backup`, `run: j
 restore-test --wait-timeout 420` with `stop_post: jcloud restore-test --cleanup`, and
 `run: jcloud healthwatch`, host apply writes their units, and an export of that tree
 needs no `carry:`.
+
+### §JCT48 A timer that runs a jcloud verb
+
+Filed from fespsp-institucional (FI195, 2026-11-18). JCT46 made backup, restore-test and
+healthwatch jcloud verbs "so a timer's run: is a jcloud command", but `host_timers.go`
+was not touched: `bashLine` turns every `run:` into `/usr/bin/env bash <root>/<first
+word>`, and `validateUnit` accepts `run: jcloud backup` because `jcloud` reads as a
+script under the root. The unit host apply writes from it runs `bash <root>/jcloud
+backup`, which fails on every firing, and nothing before the first one says so.
+
+The second half: the unit has to find the binary. `requires:` installs through apt,
+which has no jcloud, and the runner user's PATH is not root's. The binary that runs
+`host apply` is the one the timers should run, and `os.Executable()` knows where it is.
+
+What to build: a `run:` whose first word is `jcloud` names a verb, not a script.
+`validateUnit` holds the verb to the ones a timer may run (backup, restore-test,
+healthwatch) and refuses a script path spelled `jcloud`; `timerUnits` writes ExecStart
+as `<absolute path of this binary> <verb> --root <root> <args>`, the same for
+`stop_post` (`jcloud restore-test --cleanup`). `export` does not ask `carry:` to cover a
+verb. Survey reads these units as it reads the script ones.
+
+Done when the fespsp-institucional `jcloud/jcloud.yml` declares its three timers with
+`run: jcloud …` and `host apply` writes units that run them.
