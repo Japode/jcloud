@@ -16,7 +16,6 @@
 ## Block F — Moving a service: one archive carries it to an empty server
 
 - 📋 **JCT47** (deps: —) **A host.timers entry cannot run a jcloud command: run: is always a bash script under the root** — JCT46 made the jobs jcloud verbs, yet a timer still needs a one-line script and a carry: path to reach them, which FI194's jcloud/ folder should not carry. → §JCT47
-- 📋 **JCT48** (deps: —) **A timer cannot run a jcloud verb: run: always becomes bash <root>/<first word>, so run: jcloud backup fails every firing** — The verbs exist so a timer runs a jcloud command; until the unit runs this binary, a site's own server still has no backup. → §JCT48
 
 ## Done when — Block B
 
