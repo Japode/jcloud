@@ -15,6 +15,8 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
+- 📋 **JCT46** (deps: —) **A platform without Japode's bash has no backup, restore drill or health watch: a timer can only run a script it carries** — A site's own jcloud/ folder declares volumes, backup.conf and health, which is enough for jcloud to run the three jobs itself. → §JCT46
+
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
