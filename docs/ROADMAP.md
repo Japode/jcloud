@@ -15,6 +15,8 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
+- 📋 **JCT49** (deps: —) **No jcloud verb deploys a service: pin, pull, wait, rollback and edge reload exist only in Japode's deploy.sh** — A site whose server is its own jcloud/ folder has nothing to run on push but bash that walks services/ and finds nothing. → §JCT49
+
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
