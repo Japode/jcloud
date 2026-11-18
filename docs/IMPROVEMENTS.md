@@ -93,30 +93,6 @@ was.
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-### §JCT42 export carries the route's certificate
-
-The owner tests a move by pointing a workstation's hosts file at the new server under
-the real name (JCT39 was retired for that). Over HTTPS this fails: the new edge asks
-ACME for a certificate, the HTTP-01 challenge reaches the old server, and the browser
-gets no certificate at all. The site is fine and nobody can see it.
-
-`export` reads, from the edge's data volume, the certificate, key and metadata Caddy
-stores for each host the route answers for (`caddy/certificates/<issuer>/<host>/`), and
-nothing else of that volume. The key is sealed to the same age recipients as the env
-(JCT33) and never written in clear. `install` puts them at the same path in the new
-edge's volume before it starts the edge, so Caddy serves the existing certificate at
-once and renews it through ACME once DNS has moved.
-
-Not carried: the ACME account key and the other hosts' certificates. The new server
-registers its own account on its first renewal, which costs nothing for one service.
-
-A certificate with fewer than `cert_days` left (or 14) is reported at export, since it
-may expire before the cutover. With `kind: nginx` the certificate's paths come from the
-route's `ssl_certificate` lines; anything else is refused by name.
-
-Done when a hosts-file test of an installed fespsp-institucional answers over HTTPS with
-the source's certificate.
-
 ### §JCT43 host: timers that host apply installs
 
 Japode/cloud's jcloud.yml declares three timers (healthwatch, backup, restore-test), and

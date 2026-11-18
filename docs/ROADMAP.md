@@ -15,7 +15,6 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT42** (deps: —) **A moved service cannot be checked over HTTPS before DNS points at the new server: no certificate travels with it** — Testing through a hosts file is the owner's chosen check before cutover, and ACME issues nothing to a server the name does not reach yet. → §JCT42
 - 📋 **JCT43** (deps: —) **A server built by install backs nothing up and runs no health watch: its timers come from a script it lacks** — A moved site that serves fine and keeps no backup looks exactly like one that does, until the day it is needed. → §JCT43
 
 ## Done when — Block B

@@ -43,7 +43,10 @@ jcloud export <service> [--root <dir>] -o <f>   run on the host: one service's
                                                 the values of the keys it reads
                                                 sealed to each recipient, each
                                                 volume as a tar and each database
-                                                as a dump; --stop stops the
+                                                as a dump, and the edge's
+                                                certificates for the route's
+                                                hosts, sealed (Caddy only);
+                                                --stop stops the
       [--leave <path>] …                        service while volumes are copied;
                                                 a mount the manifest does not
                                                 declare refuses the export unless
@@ -54,6 +57,10 @@ jcloud install <archive> [--root <dir>]         run on the target: lay an export
        --registry-user <name>]                  it and the edge; every pinned
                                                 image is pulled first, logged in
                                                 with the token when one is given;
+                                                the certificates go into an edge
+                                                it creates, before it starts, so a
+                                                hosts-file test answers over HTTPS
+                                                before DNS moves;
                                                 host apply runs first when the
                                                 archive's jcloud.yml has host:
 jcloud host apply [--root <dir>]                as root: make the machine what

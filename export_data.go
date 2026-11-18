@@ -46,7 +46,7 @@ import (
 // ExportData is one member of the archive that carries state, as the index lists it.
 type ExportData struct {
 	Member string `json:"member"`
-	// volume, mysql or sqlite
+	// volume, mysql, sqlite or certs
 	Kind string `json:"kind"`
 	// The compose volume key, or the need's derived name for a dump.
 	Source string `json:"source"`
@@ -56,6 +56,8 @@ type ExportData struct {
 	File   string `json:"file,omitempty"`
 	Bytes  int64  `json:"bytes"`
 	Tables int    `json:"tables,omitempty"`
+	// For the sealed certificates (JCT42): the hosts they are for.
+	Hosts []string `json:"hosts,omitempty"`
 }
 
 // streamRunner runs one command with its stdout written to w. A variable so the

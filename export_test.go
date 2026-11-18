@@ -386,7 +386,9 @@ func TestExportCarriesTheState(t *testing.T) {
 	for _, c := range *calls {
 		order = append(order, strings.Join(strings.Fields(c)[:2], " "))
 	}
-	if got := strings.Join(order, ","); got != "docker inspect,docker inspect,docker exec,docker stop,docker cp,docker run,docker start" {
+	// The last cp is the edge's certificates (JCT42), read after the service is
+	// started again: they have nothing to do with its stop.
+	if got := strings.Join(order, ","); got != "docker inspect,docker inspect,docker exec,docker stop,docker cp,docker run,docker start,docker cp" {
 		t.Fatalf("order: %s", got)
 	}
 }

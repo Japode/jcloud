@@ -221,6 +221,17 @@ func ExportSet(root, name string) (files []exportFile, left, problems []string) 
 	return files, left, problems
 }
 
+// hasVolume is whether any of the state is a volume copy, the one kind --stop
+// makes consistent.
+func hasVolume(data []ExportData) bool {
+	for _, d := range data {
+		if d.Kind == "volume" {
+			return true
+		}
+	}
+	return false
+}
+
 func newExportFile(rel string, data []byte, shared, partial bool) exportFile {
 	sum := sha256.Sum256(data)
 	return exportFile{ExportMember: ExportMember{Path: rel, Sha256: hex.EncodeToString(sum[:]), Size: len(data), Shared: shared, Partial: partial}, data: data}
@@ -527,6 +538,14 @@ func export(args []string) int {
 		files = append(files, state...)
 		problems = append(problems, stateProblems...)
 	}
+	if len(problems) == 0 {
+		// The route's certificates, sealed; never a refusal (JCT42).
+		f, d, notes := ExportCerts(root, name, identity, staging, recipients, exportDocker)
+		if f != nil {
+			files, data = append(files, *f), append(data, *d)
+		}
+		dataNotes = append(dataNotes, notes...)
+	}
 	sort.Slice(files, func(i, j int) bool { return files[i].Path < files[j].Path })
 	if len(problems) > 0 {
 		fmt.Fprintf(os.Stderr, "  \033[31m✗\033[0m %s cannot be exported\n", name)
@@ -540,7 +559,7 @@ func export(args []string) int {
 		Schema: ExportSchema, Jcloud: Version(), Service: name, SourceHost: host,
 		Created: time.Now().UTC().Format(time.RFC3339), Left: left,
 		Env: ExportEnvMember, EnvMissing: envMissing,
-		Data: data, DataLive: !stop && len(data) > 0, LeftMounts: leftMounts,
+		Data: data, DataLive: !stop && hasVolume(data), LeftMounts: leftMounts,
 	}
 	tmp := out + ".partial"
 	w, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
@@ -588,8 +607,11 @@ func export(args []string) int {
 	}
 	for _, d := range data {
 		detail := fmt.Sprintf("%d byte(s)", d.Bytes)
-		if d.Kind == "mysql" {
+		switch d.Kind {
+		case "mysql":
 			detail += fmt.Sprintf(", %d table(s)", d.Tables)
+		case "certs":
+			detail += ", sealed, for " + strings.Join(d.Hosts, ", ")
 		}
 		fmt.Printf("      %s: %s %s, %s\n", d.Member, d.Kind, d.Source, detail)
 	}

@@ -17,6 +17,9 @@
 //     the sqlite copies in place of the live files, and their -wal and -shm left
 //     out), start only the database needs, wait for them, feed each dump in, and
 //     count the tables back.
+//     When the archive carries the route's certificates (JCT42) and the edge is
+//     not here yet, the edge is created too and they are opened into its data
+//     volume, so it serves them from its first request.
 //  4. Start the service and the edge, under one wait budget.
 //  5. Report against what the archive recorded, run `agree` on the laid-down tree,
 //     and print what is left by hand: DNS, with the hosts the route answers for.
@@ -59,6 +62,7 @@ import (
 	"strconv"
 	"strings"
 
+	"filippo.io/age"
 	"gopkg.in/yaml.v3"
 )
 
@@ -102,6 +106,14 @@ type installPlan struct {
 	notes   []string
 	hasPins bool
 	pinned  []string // the image references this service's pin lines name
+	// The sealed certificates the archive carries (JCT42), the edge they go into,
+	// and whether that edge was already here, in which case its certificates are
+	// its own and nothing is put in.
+	certs      *ExportData
+	edgeSvc    string
+	edgeName   string
+	edgeExists bool
+	identity   string
 }
 
 // planInstall reads the archive and the target and decides what to write, or
@@ -183,6 +195,8 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 		}
 	}
 
+	p.identity = identity
+	p.planCerts(files, run, bad)
 	pins := p.planFiles(root, files, bad)
 	p.planEnv(root, identity, files, bad)
 
@@ -205,6 +219,62 @@ func planInstall(archive, root, identity string, run dockerRunner) (*installPlan
 		}
 	}
 	return p, problems
+}
+
+// planCerts finds the certificates the archive carries and the edge they go into.
+// An edge already on the target keeps its own: install never overwrites.
+func (p *installPlan) planCerts(files map[string][]byte, run dockerRunner, bad func(string, ...any)) {
+	for i, d := range p.idx.Data {
+		if d.Kind == "certs" {
+			p.certs = &p.idx.Data[i]
+		}
+	}
+	if p.certs == nil {
+		return
+	}
+	svc, name, err := edgeContainer(files["docker-compose.yml"], p.prof)
+	if err != nil {
+		bad("%s: %v", p.certs.Member, err)
+		return
+	}
+	p.edgeSvc, p.edgeName = svc, name
+	var out bytes.Buffer
+	if err := run(nil, &out, "docker", "ps", "-a", "-q", "--filter", "name=^/"+name+"$"); err != nil {
+		bad("%v", err)
+		return
+	}
+	if strings.TrimSpace(out.String()) != "" {
+		p.edgeExists = true
+		p.notes = append(p.notes, fmt.Sprintf("%s was already here, so the certificates for %s were not put into it; it asks ACME for its own once DNS points here", name, strings.Join(p.certs.Hosts, ", ")))
+	}
+}
+
+// restoreCerts creates the edge, not started, and opens the sealed certificates
+// straight into its data volume, so the first start already serves them (JCT42).
+func (p *installPlan) restoreCerts(root string, staged map[string]string, run dockerRunner) (string, error) {
+	if p.certs == nil || p.edgeExists {
+		return "", nil
+	}
+	ids, err := LoadIdentities(p.identity)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", p.certs.Member, err)
+	}
+	f, err := os.Open(staged[p.certs.Member])
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	plain, err := age.Decrypt(f, ids...)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", p.certs.Member, err)
+	}
+	if err := run(nil, io.Discard, "docker", p.compose(root, "create", p.edgeSvc)...); err != nil {
+		return "", fmt.Errorf("creating the edge: %w", err)
+	}
+	if err := run(plain, io.Discard, "docker", "cp", "-a", "-", p.edgeName+":"+p.certs.Mount); err != nil {
+		return "", fmt.Errorf("%s: %w", p.certs.Member, err)
+	}
+	return fmt.Sprintf("certificates for %s put into %s before it started", strings.Join(p.certs.Hosts, ", "), p.edgeName), nil
 }
 
 // planFiles decides each platform file against what the target already holds, and
@@ -430,6 +500,11 @@ func (p *installPlan) restore(archive, root string, wait int, run dockerRunner) 
 	}
 	if report, err = p.restoreVolumes(staged, run); err != nil {
 		return report, []string{err.Error()}
+	}
+	if done, err := p.restoreCerts(root, staged, run); err != nil {
+		return report, []string{err.Error()}
+	} else if done != "" {
+		report = append(report, done)
 	}
 	if len(needSvcs) > 0 {
 		if err := run(nil, io.Discard, "docker", p.compose(root, append([]string{"up", "-d", "--wait", "--wait-timeout", strconv.Itoa(wait)}, needSvcs...)...)...); err != nil {
