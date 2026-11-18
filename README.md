@@ -120,6 +120,9 @@ host:                                  # absent: nothing about the host is asser
       stop_post: scripts/restore-test.sh --cleanup  # also: timeout, jitter,
       env: [BACKUP_PASSWORD]           #   accuracy, persistent, success_exit,
                                        #   description; env keys travel sealed
+    - name: japode-backup              # or a jcloud verb (backup, restore-test,
+      run: jcloud backup               #   healthwatch): run by this binary with
+      on: "*-*-* 03,09,15,21:20:00"    #   --root set, no script and no carry:
   paths:
     - path: .                          # relative to the root, or absolute
       mode: "750"

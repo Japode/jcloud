@@ -37,6 +37,18 @@
 // beside the service's own (where its backups go, where it alerts), so they travel
 // sealed with the rest (JCT33).
 //
+// Or run: and stop_post: name a jcloud verb (JCT47): a command line whose first
+// word is jcloud runs backup, restore-test or healthwatch (JCT46) through the
+// binary running host apply, by its absolute path, with --root set to the root:
+//
+//   - {name: japode-backup, run: jcloud backup, on: "*-*-* 03,09,15,21:20:00", …}
+//   - {name: japode-restore-test, run: jcloud restore-test --wait-timeout 420,
+//     stop_post: jcloud restore-test --cleanup, …}
+//
+// No script is looked for and none needs carrying, which is what lets a site's own
+// jcloud/ folder hold declarations and no bash. The unit runs the build that wrote
+// it; the next apply after an upgrade rewrites it with the new one's path.
+//
 // install applies the host twice: before anything is written, without these timers,
 // because their scripts are not laid down yet; and last, once the service is up, so
 // the first run finds the tree it runs in.
@@ -57,13 +69,45 @@ import (
 // installs is whether host apply writes this timer's units.
 func (t HostTimer) installs() bool { return t.Run != "" }
 
-// script is the root-relative script a command line runs, and its arguments.
+// script is the root-relative script a command line runs, and its arguments. A
+// jcloud verb (JCT47) runs no script, and answers "".
 func script(command string) (string, []string) {
 	f := strings.Fields(command)
-	if len(f) == 0 {
+	if len(f) == 0 || f[0] == "jcloud" {
 		return "", nil
 	}
 	return f[0], f[1:]
+}
+
+// timerVerbs are the jcloud commands a timer can run (JCT47): the platform's jobs,
+// each of which takes --root.
+var timerVerbs = []string{"backup", "restore-test", "healthwatch"}
+
+// jcloudVerb is a command line whose first word is jcloud: the verb and its
+// arguments, and whether it is one.
+func jcloudVerb(command string) (verb string, args []string, ok bool) {
+	f := strings.Fields(command)
+	if len(f) == 0 || f[0] != "jcloud" {
+		return "", nil, false
+	}
+	if len(f) == 1 {
+		return "", nil, true
+	}
+	return f[1], f[2:], true
+}
+
+// hostSelf is the jcloud a unit runs: the binary running host apply, by its
+// resolved absolute path, so the unit runs the build that wrote it and the next
+// apply after an upgrade rewrites it. Swapped by the tests.
+var hostSelf = func() (string, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return "", err
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	return filepath.ToSlash(exe), nil
 }
 
 // validateUnit holds the fields host apply writes units from.
@@ -80,6 +124,15 @@ func (t HostTimer) validateUnit(bad func(string, ...any)) {
 	}
 	for key, command := range map[string]string{"run": t.Run, "stop_post": t.StopPost} {
 		if command == "" {
+			continue
+		}
+		if verb, args, ok := jcloudVerb(command); ok {
+			switch {
+			case !contains(timerVerbs, verb):
+				bad("host.timers: %s's %s runs jcloud %q, and a timer runs %s", t.Name, key, verb, strings.Join(timerVerbs, ", "))
+			case contains(args, "--root"):
+				bad("host.timers: %s's %s passes --root, which host apply sets to the root it runs in", t.Name, key)
+			}
 			continue
 		}
 		s, _ := script(command)
@@ -116,8 +169,12 @@ func seconds(d string) string {
 	return strconv.Itoa(int(v.Seconds())) + "s"
 }
 
-// bashLine is ExecStart's value for a script under root and its arguments.
-func bashLine(root, command string) string {
+// execLine is ExecStart's value: a script under root run by bash, or a jcloud verb
+// run by self with --root set to root (JCT47).
+func execLine(root, self, command string) string {
+	if verb, args, ok := jcloudVerb(command); ok {
+		return strings.Join(append([]string{self, verb, "--root", root}, args...), " ")
+	}
 	s, args := script(command)
 	return strings.Join(append([]string{"/usr/bin/env", "bash", path.Join(root, path.Clean(s))}, args...), " ")
 }
@@ -125,8 +182,9 @@ func bashLine(root, command string) string {
 const unitHeader = "# Written by jcloud host apply from jcloud.yml's host.timers (JCT43).\n" +
 	"# Change the declaration there, not this file: the next apply rewrites it.\n"
 
-// timerUnits is the service and timer unit files for t, with root absolute.
-func timerUnits(t HostTimer, h Host, root string) (service, timer string) {
+// timerUnits is the service and timer unit files for t, with root absolute and
+// self the jcloud a verb runs as (JCT47).
+func timerUnits(t HostTimer, h Host, root, self string) (service, timer string) {
 	desc := t.Description
 	if desc == "" {
 		desc = "jcloud: " + t.Name
@@ -143,9 +201,9 @@ func timerUnits(t HostTimer, h Host, root string) (service, timer string) {
 		s.WriteString("User=" + h.User.Name + "\n")
 	}
 	s.WriteString("WorkingDirectory=" + root + "\n")
-	s.WriteString("ExecStart=" + bashLine(root, t.Run) + "\n")
+	s.WriteString("ExecStart=" + execLine(root, self, t.Run) + "\n")
 	if t.StopPost != "" {
-		s.WriteString("ExecStopPost=" + bashLine(root, t.StopPost) + "\n")
+		s.WriteString("ExecStopPost=" + execLine(root, self, t.StopPost) + "\n")
 	}
 	if len(t.SuccessExit) > 0 {
 		var codes []string
@@ -196,10 +254,23 @@ func (a *hostApplier) timers(h Host) error {
 		return fmt.Errorf("the root %q has a space in it, which a unit's ExecStart would split", root)
 	}
 	// Every script is there before any unit points at it: a timer firing a script
-	// that is not laid down fails at its first run, which nobody is watching.
+	// that is not laid down fails at its first run, which nobody is watching. A
+	// jcloud verb runs no script; it runs this binary, found once (JCT47).
+	self := ""
 	for _, t := range todo {
 		for _, command := range []string{t.Run, t.StopPost} {
 			if command == "" {
+				continue
+			}
+			if _, _, ok := jcloudVerb(command); ok {
+				if self == "" {
+					if self, err = hostSelf(); err != nil {
+						return fmt.Errorf("%s runs a jcloud verb, and this binary's own path cannot be read: %w", t.Name, err)
+					}
+					if strings.ContainsAny(self, " \t") {
+						return fmt.Errorf("this jcloud is at %q, which has a space in it that a unit's ExecStart would split", self)
+					}
+				}
 				continue
 			}
 			s, _ := script(command)
@@ -210,7 +281,7 @@ func (a *hostApplier) timers(h Host) error {
 	}
 	changed := map[string]bool{}
 	for _, t := range todo {
-		service, timer := timerUnits(t, h, root)
+		service, timer := timerUnits(t, h, root, self)
 		before := len(a.did)
 		if err := a.write("etc/systemd/system/"+t.Name+".service", service); err != nil {
 			return err

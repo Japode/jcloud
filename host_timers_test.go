@@ -145,6 +145,64 @@ func TestHostApplyInstallsTheTimersOnce(t *testing.T) {
 	}
 }
 
+// verbsProfile is Japode's three timers running jcloud verbs (JCT47), with no
+// carry: and no script anywhere.
+const verbsProfile = `host:
+  timers:
+    - {name: japode-backup, run: jcloud backup, on: "*-*-* 03,09,15,21:20:00", env: [BACKUP_REPOSITORY, BACKUP_PASSWORD]}
+    - name: japode-restore-test
+      run: jcloud restore-test --wait-timeout 420
+      stop_post: jcloud restore-test --cleanup
+      on: "Sun *-*-* 04:40:00"
+    - {name: japode-healthwatch, run: jcloud healthwatch, on: "*:0/5", success_exit: [1]}
+`
+
+// JCT47: a run: or stop_post: whose first word is jcloud runs that verb through
+// the binary running host apply, with --root set, and no script is looked for; an
+// export of that tree needs no carry:.
+func TestATimerRunsAJcloudVerb(t *testing.T) {
+	sys := withSysRoot(t, "ID=debian\nVERSION_CODENAME=bookworm\n")
+	was := hostSelf
+	hostSelf = func() (string, error) { return "/usr/local/bin/jcloud", nil }
+	t.Cleanup(func() { hostSelf = was })
+	p, err := ParseProfile([]byte(verbsProfile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if _, still, err := HostApply(root, p.Host, newTimerMachine().run); err != nil || len(still) > 0 {
+		t.Fatalf("err %v, still %v", err, still)
+	}
+	abs := filepath.ToSlash(root)
+	unit := func(name string) string {
+		return string(mustRead(t, filepath.Join(sys, "etc", "systemd", "system", name)))
+	}
+	for file, w := range map[string]string{
+		"japode-backup.service":       "ExecStart=/usr/local/bin/jcloud backup --root " + abs + "\n",
+		"japode-restore-test.service": "ExecStart=/usr/local/bin/jcloud restore-test --root " + abs + " --wait-timeout 420\nExecStopPost=/usr/local/bin/jcloud restore-test --root " + abs + " --cleanup\n",
+		"japode-healthwatch.service":  "ExecStart=/usr/local/bin/jcloud healthwatch --root " + abs + "\n",
+	} {
+		if got := unit(file); !strings.Contains(got, w) {
+			t.Fatalf("no %q in %s:\n%s", w, file, got)
+		}
+	}
+
+	tree := timersTree(t, verbsProfile)
+	if _, _, problems := ExportSet(tree, "paste"); len(problems) > 0 {
+		t.Fatalf("an export of verb timers asked for carry: %v", problems)
+	}
+
+	for _, c := range []struct{ yml, want string }{
+		{"host:\n  timers:\n    - {name: a, run: jcloud deploy, on: daily}\n", "runs jcloud \"deploy\", and a timer runs backup, restore-test, healthwatch"},
+		{"host:\n  timers:\n    - {name: a, run: jcloud backup --root /srv, on: daily}\n", "passes --root"},
+		{"host:\n  timers:\n    - {name: a, run: jcloud, on: daily}\n", "runs jcloud \"\""},
+	} {
+		if _, err := ParseProfile([]byte(c.yml)); err == nil || !strings.Contains(err.Error(), c.want) {
+			t.Fatalf("%q: got %v, want %q", c.yml, err, c.want)
+		}
+	}
+}
+
 // JCT43: a timer whose script is not under the root is refused before any unit
 // points at it.
 func TestHostApplyRefusesATimerWithNoScript(t *testing.T) {

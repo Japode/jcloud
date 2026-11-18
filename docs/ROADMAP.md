@@ -15,8 +15,6 @@
 
 ## Block F — Moving a service: one archive carries it to an empty server
 
-- 📋 **JCT47** (deps: —) **A host.timers entry cannot run a jcloud command: run: is always a bash script under the root** — JCT46 made the jobs jcloud verbs, yet a timer still needs a one-line script and a carry: path to reach them, which FI194's jcloud/ folder should not carry. → §JCT47
-
 ## Done when — Block B
 
 - **jcloud agree passes on Viglet Cloud** Viglet Cloud carries a jcloud.yml and
