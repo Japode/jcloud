@@ -71,7 +71,10 @@ jcloud install <archive> [--root <dir>]         run on the target: lay an export
                                                 and what install writes is
                                                 handed to host.user
 jcloud host apply [--root <dir>]                as root: make the machine what
-                                                host: declares, then survey it
+                                                host: declares, then survey it;
+                                                Debian, Ubuntu and Amazon Linux
+                                                2023 (where the Security Group is
+                                                the firewall, so no ufw)
 jcloud backup [--root <dir>]                    every named volume to the restic
                                                 repository .env names, each sqlite
                                                 file with VACUUM INTO and each

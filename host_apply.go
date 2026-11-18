@@ -11,8 +11,10 @@
 //
 //  1. Docker engine and the compose plugin, from Docker's own apt repository, when
 //     requires: names docker or compose and either is missing; each other tool
-//     requires: names, by apt package of the same name. Debian and Ubuntu only:
-//     another distribution is refused by name, never guessed at.
+//     requires: names, by apt package of the same name. On Amazon Linux 2023
+//     (JCT51) docker comes from dnf and is started, the compose plugin from its
+//     release checked against the .sha256 beside it, and tools from dnf. Any other
+//     distribution is refused by name, never guessed at.
 //  2. The user, created when absent, and added to each group.
 //  3. Each path: created when absent (a directory, or an empty file when its mode
 //     gives the owner no x bit, as a 600 pin file), then its mode and owner.
@@ -108,26 +110,35 @@ func osRelease() (id, codename string, err error) {
 	return id, codename, nil
 }
 
-// apt is the package manager, and only on a distribution this build knows.
+// distributions is every /etc/os-release ID this build installs packages on.
+const distributions = "debian, ubuntu and amzn (Amazon Linux 2023)"
+
+// apt is the package manager, and only on a distribution this build knows: apt
+// on Debian and Ubuntu, dnf on Amazon Linux (JCT51).
 func (a *hostApplier) apt(packages ...string) error {
 	id, _, err := osRelease()
 	if err != nil {
-		return fmt.Errorf("/etc/os-release: %v — this build installs packages on debian and ubuntu only", unwrapPath(err))
+		return fmt.Errorf("/etc/os-release: %v — this build installs packages on %s only", unwrapPath(err), distributions)
 	}
-	if id != "debian" && id != "ubuntu" {
-		return fmt.Errorf("this host is %s, and this build installs packages on debian and ubuntu only; install %s by hand", id, strings.Join(packages, ", "))
+	switch id {
+	case "debian", "ubuntu":
+		return a.do("apt-get", append([]string{"install", "-y", "--no-install-recommends"}, packages...)...)
+	case "amzn":
+		return a.do("dnf", append([]string{"install", "-y"}, packages...)...)
 	}
-	return a.do("apt-get", append([]string{"install", "-y", "--no-install-recommends"}, packages...)...)
+	return fmt.Errorf("this host is %s, and this build installs packages on %s only; install %s by hand", id, distributions, strings.Join(packages, ", "))
 }
 
 // tools is step 1.
 func (a *hostApplier) tools(h Host) error {
+	id, _, _ := osRelease()
 	wantDocker := contains(h.Requires, "docker") || contains(h.Requires, "compose")
 	if wantDocker && (!a.has("docker") || !a.has("compose")) {
-		if err := a.dockerRepository(); err != nil {
-			return fmt.Errorf("docker: %w", err)
+		install := a.dockerFromDocker
+		if id == "amzn" {
+			install = a.dockerOnAmazonLinux
 		}
-		if err := a.apt(dockerPackages...); err != nil {
+		if err := install(); err != nil {
 			return fmt.Errorf("docker: %w", err)
 		}
 	}
@@ -138,12 +149,66 @@ func (a *hostApplier) tools(h Host) error {
 		}
 	}
 	if len(missing) > 0 {
-		if err := a.do("apt-get", "update"); err != nil {
-			return err
+		if id != "amzn" {
+			if err := a.do("apt-get", "update"); err != nil {
+				return err
+			}
 		}
 		return a.apt(missing...)
 	}
 	return nil
+}
+
+// dockerFromDocker is docker and its plugins from Docker's own apt repository.
+func (a *hostApplier) dockerFromDocker() error {
+	if err := a.dockerRepository(); err != nil {
+		return err
+	}
+	return a.apt(dockerPackages...)
+}
+
+// composeVersion is the docker/compose release host apply installs where no
+// package carries the plugin; JCLOUD_COMPOSE_VERSION overrides it.
+const composeVersion = "v5.6.1"
+
+func composeVersionRef() string {
+	if v := os.Getenv("JCLOUD_COMPOSE_VERSION"); v != "" {
+		return v
+	}
+	return composeVersion
+}
+
+// composeScript downloads the compose plugin for $2 (the architecture) at $1
+// (the version), checks it against the .sha256 published beside it, and installs
+// it where docker looks for plugins.
+const composeScript = `set -eu
+d=$(mktemp -d); cd "$d"
+asset="docker-compose-linux-$2"
+base="https://github.com/docker/compose/releases/download/$1"
+curl -fsSLO "$base/$asset"; curl -fsSLO "$base/$asset.sha256"
+sha256sum -c "$asset.sha256"
+install -D -m 755 "$asset" /usr/local/lib/docker/cli-plugins/docker-compose
+cd /; rm -rf "$d"`
+
+// dockerOnAmazonLinux is docker from Amazon's repository, which dnf does not
+// start, and the compose plugin, which Amazon does not package (JCT51).
+func (a *hostApplier) dockerOnAmazonLinux() error {
+	if !a.has("docker") {
+		if err := a.apt("docker"); err != nil {
+			return err
+		}
+	}
+	if err := a.do("systemctl", "enable", "--now", "docker"); err != nil {
+		return err
+	}
+	if a.has("compose") {
+		return nil
+	}
+	arch, err := a.run("uname", "-m")
+	if err != nil {
+		return err
+	}
+	return a.do("sh", "-c", composeScript, "sh", composeVersionRef(), strings.TrimSpace(arch))
 }
 
 // dockerRepository adds Docker's apt repository the way its own instructions do:
@@ -340,6 +405,12 @@ func (a *hostApplier) firewall(h Host) error {
 func HostApply(root string, h Host, run commandRunner) (did []string, still []Divergence, err error) {
 	if out, err := run("id", "-u"); err != nil || strings.TrimSpace(out) != "0" {
 		return nil, nil, errors.New("host apply changes the machine and has to run as root (sudo jcloud host apply)")
+	}
+	// Refused before any step changes the machine, so the remedy is read on an
+	// untouched host. Amazon Linux packages no ufw, and on EC2 the Security Group
+	// is the firewall; firewalld beside docker is a known source of conflicts (JCT51).
+	if id, _, _ := osRelease(); id == "amzn" && h.Firewall == "ufw" {
+		return nil, nil, errors.New("host.firewall is ufw, which Amazon Linux does not package: on EC2 the Security Group is the firewall, so drop firewall: from host: in jcloud.yml and open 22, 80 and 443 (tcp, and 443/udp) in the instance's Security Group")
 	}
 	a := &hostApplier{root: root, run: run}
 	steps := []struct {

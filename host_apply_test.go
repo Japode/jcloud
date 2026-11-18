@@ -34,6 +34,15 @@ func (m *fakeMachine) run(name string, args ...string) (string, error) {
 	switch {
 	case line == "id -u":
 		return m.uid + "\n", nil
+	case name == "sh" && len(args) > 1 && strings.Contains(args[1], "docker-compose-linux-"):
+		// The compose plugin downloaded and checked (JCT51).
+		m.tools["compose"] = true
+	case line == "uname -m":
+		return "x86_64\n", nil
+	case name == "dnf" && args[0] == "install":
+		for _, p := range args[2:] {
+			m.tools[p] = true
+		}
 	case name == "sh":
 		if m.tools[args[len(args)-1]] {
 			return "/usr/bin/" + args[len(args)-1], nil
@@ -201,6 +210,62 @@ func TestHostApplyBuildsAnEmptyHostOnce(t *testing.T) {
 	did, still, err = HostApply("/srv/cloud", p.Host, m.run)
 	if err != nil || len(still) > 0 || len(did) > 0 {
 		t.Fatalf("a second apply changed %v (err %v, still %v)", did, err, still)
+	}
+}
+
+// JCT51: on Amazon Linux 2023 docker comes from dnf and is started, the compose
+// plugin from its release checked against its .sha256, git from dnf, and the user
+// as anywhere; a second apply changes nothing. ufw there is refused before any
+// step, naming the Security Group.
+func TestHostApplyOnAmazonLinux(t *testing.T) {
+	withSysRoot(t, "NAME=\"Amazon Linux\"\nID=\"amzn\"\nVERSION_ID=\"2023\"\n")
+	p, err := ParseProfile([]byte("host:\n  user: {name: runner, groups: [docker]}\n  requires: [docker, compose, git, rsync]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newFakeMachine()
+	m.tools["rsync"] = true
+	did, still, err := HostApply("/opt/site/jcloud", p.Host, m.run)
+	if err != nil || len(still) > 0 {
+		t.Fatalf("err %v, still %v\nran:\n%s", err, still, strings.Join(m.ran, "\n"))
+	}
+	joined := strings.Join(did, "\n")
+	for _, w := range []string{
+		"dnf install -y docker",
+		"systemctl enable --now docker",
+		"sh -c set -eu",
+		"dnf install -y git",
+		"useradd --create-home --shell /bin/bash runner",
+		"usermod -aG docker runner",
+	} {
+		if !strings.Contains(joined, w) {
+			t.Fatalf("no %q in:\n%s", w, joined)
+		}
+	}
+	for _, l := range m.ran {
+		if strings.HasPrefix(l, "apt-get") || strings.Contains(l, "download.docker.com/linux") {
+			t.Fatalf("an apt step ran on Amazon Linux: %s", l)
+		}
+		if strings.HasPrefix(l, "sh -c set -eu") && !strings.HasSuffix(l, "sh "+composeVersion+" x86_64") {
+			t.Fatalf("the compose plugin was asked for the wrong version or architecture: %s", l)
+		}
+	}
+	if !strings.Contains(composeScript, `sha256sum -c "$asset.sha256"`) {
+		t.Fatal("the compose plugin is not checked against its .sha256")
+	}
+	if did, still, err = HostApply("/opt/site/jcloud", p.Host, m.run); err != nil || len(still) > 0 || len(did) > 0 {
+		t.Fatalf("a second apply changed %v (err %v, still %v)", did, err, still)
+	}
+
+	m = newFakeMachine()
+	_, _, err = HostApply("/opt/site/jcloud", Host{Firewall: "ufw", FirewallAllow: []string{"OpenSSH"}, Requires: []string{"docker"}}, m.run)
+	if err == nil || !strings.Contains(err.Error(), "Security Group") {
+		t.Fatalf("got %v", err)
+	}
+	for _, l := range m.ran {
+		if l != "id -u" {
+			t.Fatalf("ran %q before refusing ufw on Amazon Linux", l)
+		}
 	}
 }
 
